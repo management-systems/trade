@@ -268,7 +268,6 @@ export default function App() {
     // Check if VIX is above max safety limit
     const isVixTooHigh = vix > thresholds.vixMax;
 
-    const atmStrike = Math.round(spot / 50) * 50;
     let ceOiChangeAtmNear = 0;
     let peOiChangeAtmNear = 0;
 
