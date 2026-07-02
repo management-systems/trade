@@ -1,5 +1,7 @@
 import fs from 'fs';
+import mongoose from 'mongoose';
 import { config } from '../config.js';
+import RiskModel from '../models/Risk.js';
 
 class RiskManager {
   constructor() {
@@ -9,14 +11,14 @@ class RiskManager {
     this.realizedPnlToday = 0;
     this.currentDate = this.getTodayDateString();
     
-    this.loadRiskState();
+    this.loadRiskStateLocal();
   }
 
   getTodayDateString() {
     return new Date().toISOString().split('T')[0];
   }
 
-  loadRiskState() {
+  loadRiskStateLocal() {
     try {
       if (fs.existsSync(config.DB_PATH)) {
         const data = JSON.parse(fs.readFileSync(config.DB_PATH, 'utf8'));
@@ -25,71 +27,116 @@ class RiskManager {
           this.maxLossPerDay = data.riskConfig.maxLossPerDay ?? config.RISK.MAX_LOSS_PER_DAY;
         }
         
-        // Reset or load daily statistics
         const today = this.getTodayDateString();
         if (data.riskState && data.riskState.date === today) {
           this.tradesTakenToday = data.riskState.tradesTakenToday ?? 0;
           this.realizedPnlToday = data.riskState.dailyPnl ?? 0;
           this.currentDate = today;
         } else {
-          this.resetDailyStats();
+          this.resetDailyStatsLocal();
         }
       }
     } catch (error) {
-      console.error("RiskManager: Error loading risk state, using defaults:", error);
+      console.error("RiskManager: Error loading local state:", error);
     }
   }
 
-  saveRiskState() {
+  async ensureRiskLoaded() {
+    this.checkResetDate();
+
+    // If MongoDB is connected, load state from Mongo
+    if (mongoose.connection.readyState === 1) {
+      try {
+        let state = await RiskModel.findOne({ date: this.currentDate });
+        if (!state) {
+          state = await RiskModel.create({
+            date: this.currentDate,
+            maxTradesPerDay: this.maxTradesPerDay,
+            maxLossPerDay: this.maxLossPerDay,
+            tradesTakenToday: 0,
+            realizedPnlToday: 0
+          });
+        }
+        this.maxTradesPerDay = state.maxTradesPerDay;
+        this.maxLossPerDay = state.maxLossPerDay;
+        this.tradesTakenToday = state.tradesTakenToday;
+        this.realizedPnlToday = state.realizedPnlToday;
+      } catch (e) {
+        console.error("RiskManager: MongoDB load failed, using local memory state:", e);
+      }
+    }
+  }
+
+  async saveRiskState() {
+    // 1. Save to local JSON
     try {
       let dbData = {};
       if (fs.existsSync(config.DB_PATH)) {
         dbData = JSON.parse(fs.readFileSync(config.DB_PATH, 'utf8'));
       }
-      
       dbData.riskConfig = {
         maxTradesPerDay: this.maxTradesPerDay,
         maxLossPerDay: this.maxLossPerDay
       };
-      
       dbData.riskState = {
         date: this.currentDate,
         tradesTakenToday: this.tradesTakenToday,
         dailyPnl: this.realizedPnlToday
       };
-
       fs.writeFileSync(config.DB_PATH, JSON.stringify(dbData, null, 2), 'utf8');
     } catch (error) {
-      console.error("RiskManager: Error saving risk state:", error);
+      console.error("RiskManager: Local JSON save failed:", error);
+    }
+
+    // 2. Save to MongoDB
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await RiskModel.findOneAndUpdate(
+          { date: this.currentDate },
+          {
+            maxTradesPerDay: this.maxTradesPerDay,
+            maxLossPerDay: this.maxLossPerDay,
+            tradesTakenToday: this.tradesTakenToday,
+            realizedPnlToday: this.realizedPnlToday
+          },
+          { upsert: true, new: true }
+        );
+      } catch (e) {
+        console.error("RiskManager: MongoDB save failed:", e);
+      }
     }
   }
 
-  resetDailyStats() {
+  resetDailyStatsLocal() {
     this.tradesTakenToday = 0;
     this.realizedPnlToday = 0;
     this.currentDate = this.getTodayDateString();
-    this.saveRiskState();
   }
 
-  updateConfig(maxTrades, maxLoss) {
+  async resetDailyStats() {
+    this.tradesTakenToday = 0;
+    this.realizedPnlToday = 0;
+    this.currentDate = this.getTodayDateString();
+    await this.saveRiskState();
+  }
+
+  async updateConfig(maxTrades, maxLoss) {
     this.maxTradesPerDay = parseInt(maxTrades) || config.RISK.MAX_TRADES_PER_DAY;
     this.maxLossPerDay = parseFloat(maxLoss) || config.RISK.MAX_LOSS_PER_DAY;
-    this.saveRiskState();
-    console.log(`RiskManager: Config updated. Max Trades: ${this.maxTradesPerDay}, Max Loss: ₹${this.maxLossPerDay}`);
+    await this.saveRiskState();
   }
 
   checkResetDate() {
     const today = this.getTodayDateString();
     if (this.currentDate !== today) {
-      console.log(`RiskManager: New trading day detected (${today}). Resetting daily stats.`);
-      this.resetDailyStats();
+      this.resetDailyStatsLocal();
+      this.currentDate = today;
     }
   }
 
-  canPlaceTrade() {
-    this.checkResetDate();
+  async canPlaceTrade() {
+    await this.ensureRiskLoaded();
 
-    // Check if daily trade limit exceeded
     if (this.tradesTakenToday >= this.maxTradesPerDay) {
       return { 
         allowed: false, 
@@ -97,7 +144,6 @@ class RiskManager {
       };
     }
 
-    // Check if daily loss limit already breached (realized)
     if (this.realizedPnlToday <= -this.maxLossPerDay) {
       return { 
         allowed: false, 
@@ -108,27 +154,26 @@ class RiskManager {
     return { allowed: true };
   }
 
-  registerTradeTaken() {
-    this.checkResetDate();
+  async registerTradeTaken() {
+    await this.ensureRiskLoaded();
     this.tradesTakenToday++;
-    this.saveRiskState();
+    await this.saveRiskState();
   }
 
-  updateOnTradeClose(pnl) {
-    this.checkResetDate();
+  async updateOnTradeClose(pnl) {
+    await this.ensureRiskLoaded();
     this.realizedPnlToday += pnl;
-    this.saveRiskState();
+    await this.saveRiskState();
   }
 
-  // Returns true if the aggregate daily P&L (realized + active unrealized) breaches the max loss limit
-  isLossLimitBreached(unrealizedPnl) {
-    this.checkResetDate();
+  async isLossLimitBreached(unrealizedPnl) {
+    await this.ensureRiskLoaded();
     const totalPnl = this.realizedPnlToday + unrealizedPnl;
     return totalPnl <= -this.maxLossPerDay;
   }
 
-  getRiskState(unrealizedPnl = 0) {
-    this.checkResetDate();
+  async getRiskState(unrealizedPnl = 0) {
+    await this.ensureRiskLoaded();
     const totalPnl = this.realizedPnlToday + unrealizedPnl;
     return {
       maxTradesPerDay: this.maxTradesPerDay,

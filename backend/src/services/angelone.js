@@ -164,6 +164,19 @@ class AngelOneService extends EventEmitter {
       throw error;
     }
   }
+
+  async getMarketQuotes(tokens) {
+    if (!this.isConnected || !this.smartapi) return null;
+    try {
+      const response = await this.smartapi.getMarketData("FULL", { "NFO": tokens });
+      if (response && response.status && response.data) {
+        return response.data.fetched || [];
+      }
+    } catch (e) {
+      console.error("AngelOne: Fetching market quotes failed:", e.message || e);
+    }
+    return null;
+  }
 }
 
 export default new AngelOneService();

@@ -40,8 +40,6 @@ router.get('/auth/status', (req, res) => {
 
 // Get current options chain, spots, and indicators snapshot
 router.get('/market/data', (req, res) => {
-  // Pull current active simulator data
-  // (Note: if Angel One is connected, the spot price is overwritten by the real ticker)
   const data = marketSimulator.getLatestData();
   const signals = analyzeSignal(data);
 
@@ -64,16 +62,21 @@ router.get('/market/data', (req, res) => {
 // --- PAPER TRADING ENGINE ---
 
 // Fetch wallet stats, positions, history, and metrics
-router.get('/paper/state', (req, res) => {
-  res.json(paperTrader.getAccountState());
+router.get('/paper/state', async (req, res) => {
+  try {
+    const state = await paperTrader.getAccountState();
+    res.json(state);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // Place a mock order
-router.post('/paper/order', (req, res) => {
+router.post('/paper/order', async (req, res) => {
   const { symbol, type, optionType, strike, entryPrice, quantity, slPoints, targetPoints, isAutoSignal } = req.body;
   
   try {
-    const newPos = paperTrader.placeOrder({
+    const newPos = await paperTrader.placeOrder({
       symbol,
       type,
       optionType,
@@ -91,11 +94,11 @@ router.post('/paper/order', (req, res) => {
 });
 
 // Close an active position
-router.post('/paper/close', (req, res) => {
+router.post('/paper/close', async (req, res) => {
   const { positionId, exitPrice, reason } = req.body;
   
   try {
-    const closedTrade = paperTrader.closePosition(positionId, parseFloat(exitPrice), reason || "MANUAL EXIT");
+    const closedTrade = await paperTrader.closePosition(positionId, parseFloat(exitPrice), reason || "MANUAL EXIT");
     res.json({ success: true, trade: closedTrade });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -106,25 +109,35 @@ router.post('/paper/close', (req, res) => {
 // --- RISK MANAGEMENT MODULE ---
 
 // Fetch current limits and daily metrics
-router.get('/risk/config', (req, res) => {
-  res.json(riskManager.getRiskState());
+router.get('/risk/config', async (req, res) => {
+  try {
+    const state = await riskManager.getRiskState();
+    res.json(state);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // Update risk settings (max trades & daily stop loss)
-router.post('/risk/config', (req, res) => {
+router.post('/risk/config', async (req, res) => {
   const { maxTradesPerDay, maxLossPerDay } = req.body;
   try {
-    riskManager.updateConfig(maxTradesPerDay, maxLossPerDay);
-    res.json({ success: true, riskState: riskManager.getRiskState() });
+    await riskManager.updateConfig(maxTradesPerDay, maxLossPerDay);
+    const state = await riskManager.getRiskState();
+    res.json({ success: true, riskState: state });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
   }
 });
 
 // Manually reset daily loss and trade count limits for testing
-router.post('/risk/reset', (req, res) => {
-  riskManager.resetDailyStats();
-  res.json({ success: true, message: "Daily risk tracking counters reset successfully." });
+router.post('/risk/reset', async (req, res) => {
+  try {
+    await riskManager.resetDailyStats();
+    res.json({ success: true, message: "Daily risk tracking counters reset successfully." });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 export default router;

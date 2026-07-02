@@ -20,3 +20,8 @@ Thumbs.db
 .vscode/
 .idea/
 .gemini/
+
+# Caches
+*scrips_cache.json
+backend/scrips_cache.json
+
