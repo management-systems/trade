@@ -49,17 +49,18 @@ class ScripMasterService {
         if (
           (item.name === 'NIFTY' || item.name === 'BANKNIFTY') &&
           item.exch_seg === 'NFO' &&
-          item.instrumenttype === 'OPTIDX'
+          (item.instrumenttype === 'OPTIDX' || item.instrumenttype === 'FUTIDX')
         ) {
-          const strike = parseFloat(item.strike) / 100;
-          const optionType = item.symbol.endsWith('CE') ? 'CE' : 'PE';
+          const strike = item.instrumenttype === 'OPTIDX' ? parseFloat(item.strike) / 100 : 0;
+          const optionType = item.instrumenttype === 'OPTIDX' ? (item.symbol.endsWith('CE') ? 'CE' : 'PE') : 'FUT';
 
           const cleanItem = {
             token: item.token,
             symbol: item.symbol,
             expiry: item.expiry,
             strike: strike,
-            optionType: optionType
+            optionType: optionType,
+            instrumentType: item.instrumenttype
           };
           
           filtered[item.symbol] = cleanItem;
@@ -70,7 +71,7 @@ class ScripMasterService {
       // Write cache to filesystem
       fs.writeFileSync(CACHE_FILE, JSON.stringify(filtered, null, 2), 'utf8');
       this.isLoaded = true;
-      console.log(`ScripMaster: Successfully parsed and cached ${this.tokenMap.size} option symbols.`);
+      console.log(`ScripMaster: Successfully parsed and cached ${this.tokenMap.size} symbols.`);
     } catch (error) {
       console.error("ScripMaster: Download/Parse failed:", error);
     }
@@ -129,6 +130,24 @@ class ScripMasterService {
       }
     }
 
+    return match;
+  }
+
+  getNiftyFutures() {
+    const sortedKeys = Array.from(this.tokenMap.keys());
+    let match = null;
+    let nearestExpiryDate = Infinity;
+
+    for (const symbol of sortedKeys) {
+      const item = this.tokenMap.get(symbol);
+      if (item && item.instrumentType === 'FUTIDX' && symbol.startsWith('NIFTY')) {
+        const expiryTime = new Date(item.expiry).getTime();
+        if (!isNaN(expiryTime) && expiryTime < nearestExpiryDate && expiryTime >= Date.now() - 86400000) {
+          nearestExpiryDate = expiryTime;
+          match = item;
+        }
+      }
+    }
     return match;
   }
 }

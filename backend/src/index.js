@@ -109,6 +109,12 @@ marketSimulator.on('tick', async (marketData) => {
         if (c.pe) tokens.push(c.pe.token);
       });
 
+      // Get Nifty Futures contract token
+      const futScrip = scripMaster.getNiftyFutures();
+      if (futScrip) {
+        tokens.push(futScrip.token);
+      }
+
       if (tokens.length > 0) {
         // Fetch accurate quotes from SmartAPI
         const quotes = await angelOneService.getMarketQuotes(tokens);
@@ -117,6 +123,26 @@ marketSimulator.on('tick', async (marketData) => {
           quotes.forEach(q => {
             quoteMap[q.symbolToken] = q;
           });
+
+          // Process Futures Contract details
+          let futLtp = marketData.niftySpot + 12; // default premium
+          let futOi = marketData.futuresOi;
+          let futOiChange = 0;
+
+          if (futScrip && quoteMap[futScrip.token]) {
+            const fQuote = quoteMap[futScrip.token];
+            futLtp = parseFloat(fQuote.ltp || 0);
+            futOi = parseInt(fQuote.opnInterest || 0);
+
+            if (prevOiMap.has(futScrip.token)) {
+              futOiChange = futOi - prevOiMap.get(futScrip.token);
+            }
+            prevOiMap.set(futScrip.token, futOi);
+          }
+
+          marketData.futuresPrice = futLtp;
+          marketData.futuresContractOi = futOi;
+          marketData.futuresOiChange = futOiChange;
 
           // Enrich simulated option chain with true market numbers
           marketData.optionChain = contracts.map(c => {
@@ -194,6 +220,9 @@ marketSimulator.on('tick', async (marketData) => {
     bankNiftySpot: marketData.bankNiftySpot,
     indiaVix: marketData.indiaVix,
     futuresOi: marketData.futuresOi,
+    futuresPrice: marketData.futuresPrice || (marketData.niftySpot + 12),
+    futuresContractOi: marketData.futuresContractOi || marketData.futuresOi,
+    futuresOiChange: marketData.futuresOiChange || 0,
     optionChain: marketData.optionChain,
     signal: {
       type: signalResult.signalType,

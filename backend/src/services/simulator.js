@@ -12,6 +12,9 @@ class MarketSimulator extends EventEmitter {
     this.oiData = {}; // Store persistent OI values to simulate gradual changes
     this.indiaVix = 14.5;
     this.futuresOi = 1250000;
+    this.futuresPrice = 24162.0;
+    this.futuresContractOi = 1250000;
+    this.futuresOiChange = 0;
     
     this.initializeHistory();
   }
@@ -73,6 +76,11 @@ class MarketSimulator extends EventEmitter {
 
         const futChange = Math.floor((Math.random() - 0.48) * 1100);
         this.futuresOi = Math.max(500000, this.futuresOi + futChange);
+
+        // Drift Futures Price slightly above Spot
+        this.futuresPrice = parseFloat((this.niftySpot + 12 + Math.sin(Date.now() / 15000) * 3).toFixed(2));
+        this.futuresContractOi = this.futuresOi;
+        this.futuresOiChange += futChange;
       }
 
       // 2. Aggregate ticks for the current minute candle
@@ -130,6 +138,9 @@ class MarketSimulator extends EventEmitter {
         bankNiftySpot: this.bankNiftySpot,
         indiaVix: this.indiaVix,
         futuresOi: this.futuresOi,
+        futuresPrice: this.futuresPrice,
+        futuresContractOi: this.futuresContractOi,
+        futuresOiChange: this.futuresOiChange,
         optionChain,
         candles: this.candles
       });

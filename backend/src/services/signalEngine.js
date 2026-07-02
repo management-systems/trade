@@ -132,6 +132,23 @@ export function analyzeSignal(marketData) {
   const latestVolume = latestCandle.volume;
   const isVolumeExpansion = latestVolume > avgVolume * 1.3;
 
+  // Market Structure Highs/Lows comparison (Trend Check)
+  const currentCandle = completedCandles[completedCandles.length - 1];
+  const prevCandle = completedCandles[completedCandles.length - 2];
+  let structureTrend = 'NEUTRAL';
+  let isCeStructureMet = false;
+  let isPeStructureMet = false;
+  
+  if (currentCandle && prevCandle) {
+    if (currentCandle.high > prevCandle.high && currentCandle.low > prevCandle.low) {
+      structureTrend = 'BULLISH';
+      isCeStructureMet = true;
+    } else if (currentCandle.high < prevCandle.high && currentCandle.low < prevCandle.low) {
+      structureTrend = 'BEARISH';
+      isPeStructureMet = true;
+    }
+  }
+
   // 2. Options Open Interest (OI) Analysis
   // Find At-The-Money (ATM) strike
   const atmStrike = Math.round(niftySpot / 50) * 50;
@@ -179,7 +196,14 @@ export function analyzeSignal(marketData) {
     latestVolume,
     isVolumeExpansion,
     rsi,
-    macd: macdData
+    macd: macdData,
+    structure: {
+      trend: structureTrend,
+      currentHigh: currentCandle ? currentCandle.high : 0,
+      currentLow: currentCandle ? currentCandle.low : 0,
+      prevHigh: prevCandle ? prevCandle.high : 0,
+      prevLow: prevCandle ? prevCandle.low : 0
+    }
   };
 
   // 3. Evaluate Signal Conditions
@@ -222,6 +246,12 @@ export function analyzeSignal(marketData) {
     }
   }
 
+  // Rule 6: Market Structure Trend (Score: +20)
+  if (isCeStructureMet) {
+    buyCeScore += 20;
+    ceReasons.push("Market Structure is Bullish (Higher High & Higher Low)");
+  }
+
   // Evaluate BEARISH (Buy PE) conditions
   let buyPeScore = 0;
   const peReasons = [];
@@ -260,6 +290,12 @@ export function analyzeSignal(marketData) {
     } else {
       peReasons.push("Bearish OI: Puts are unwinding (Support Weakening)");
     }
+  }
+
+  // Rule 6: Market Structure Trend (Score: +20)
+  if (isPeStructureMet) {
+    buyPeScore += 20;
+    peReasons.push("Market Structure is Bearish (Lower High & Lower Low)");
   }
 
   // Determine final trade recommendation

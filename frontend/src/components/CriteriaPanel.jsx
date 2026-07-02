@@ -66,6 +66,16 @@ export default function CriteriaPanel({ settings, onToggle, thresholds, onThresh
       weight: '25%'
     },
     {
+      id: 'structure',
+      name: 'Market Structure Trend',
+      liveValue: `Trend: ${indicators.structure?.trend || 'NEUTRAL'} [H: ₹${Math.round(indicators.structure?.currentHigh || 0)} | L: ₹${Math.round(indicators.structure?.currentLow || 0)}]`,
+      ceCondition: 'High > Prev High & Low > Prev Low',
+      peCondition: 'High < Prev High & Low < Prev Low',
+      ceMet: indicators.structure?.trend === 'BULLISH',
+      peMet: indicators.structure?.trend === 'BEARISH',
+      weight: '+20 Score'
+    },
+    {
       id: 'ema',
       name: 'EMA 20 / 50 Crossover',
       liveValue: `EMA20: ₹${ema20.toFixed(1)} | EMA50: ₹${ema50.toFixed(1)}`,

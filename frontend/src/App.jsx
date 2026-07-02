@@ -26,7 +26,8 @@ export default function App() {
     oi: true,
     rsi: true,
     macd: true,
-    vix: true
+    vix: true,
+    structure: true
   });
 
   // Dynamic Rule Threshold settings
@@ -51,6 +52,9 @@ export default function App() {
     bankNiftySpot: 52200,
     indiaVix: 14.5,
     futuresOi: 1250000,
+    futuresPrice: 24162,
+    futuresContractOi: 1250000,
+    futuresOiChange: 0,
     optionChain: [],
     signal: { type: 'NO TRADE', confidence: 0, reason: 'Connecting feed...', atmStrike: null },
     indicators: {},
@@ -111,6 +115,9 @@ export default function App() {
           bankNiftySpot: data.bankNiftySpot,
           indiaVix: data.indiaVix || 14.5,
           futuresOi: data.futuresOi || 1250000,
+          futuresPrice: data.futuresPrice || (data.niftySpot + 12),
+          futuresContractOi: data.futuresContractOi || (data.futuresOi || 1250000),
+          futuresOiChange: data.futuresOiChange || 0,
           optionChain: data.optionChain,
           signal: data.signal,
           indicators: data.indicators,
@@ -179,7 +186,7 @@ export default function App() {
     const optionChain = marketData.optionChain || [];
     const vix = marketData.indiaVix || 14.5;
     
-    const { ema20, ema50, vwap, support, resistance, isVolumeExpansion, rsi, macd: macdData } = indicators;
+    const { ema20, ema50, vwap, support, resistance, isVolumeExpansion, rsi, macd: macdData, structure } = indicators;
     
     // Check if VIX is above max safety limit
     const isVixTooHigh = vix > thresholds.vixMax;
@@ -268,7 +275,13 @@ export default function App() {
         }
       }
     }
-
+    if (criteriaSettings.structure) {
+      totalCeWeight += 20;
+      if (structure && structure.trend === 'BULLISH') {
+        buyCeScore += 20;
+        ceReasons.push("Market Structure: Higher High & Higher Low (+20 Score)");
+      }
+    }
     let buyPeScore = 0;
     let totalPeWeight = 0;
     const peReasons = [];
@@ -337,7 +350,13 @@ export default function App() {
         }
       }
     }
-
+    if (criteriaSettings.structure) {
+      totalPeWeight += 20;
+      if (structure && structure.trend === 'BEARISH') {
+        buyPeScore += 20;
+        peReasons.push("Market Structure: Lower High & Lower Low (+20 Score)");
+      }
+    }
     const ceConfidence = totalCeWeight > 0 ? Math.round((buyCeScore / totalCeWeight) * 100) : 0;
     const peConfidence = totalPeWeight > 0 ? Math.round((buyPeScore / totalPeWeight) * 100) : 0;
 
@@ -495,10 +514,13 @@ export default function App() {
               <div className="space-y-6 lg:col-span-1">
                 <MarketWatch 
                   niftySpot={marketData.niftySpot} 
-                  bankNiftySpot={marketData.bankNiftySpot} 
                   indiaVix={marketData.indiaVix}
                   futuresOi={marketData.futuresOi}
+                  futuresPrice={marketData.futuresPrice}
+                  futuresContractOi={marketData.futuresContractOi}
+                  futuresOiChange={marketData.futuresOiChange}
                   indicators={marketData.indicators} 
+                  candles={marketData.candles}
                 />
                 <SignalPanel 
                   signal={customSignal} 
