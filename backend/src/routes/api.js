@@ -27,11 +27,16 @@ router.post('/auth/logout', (req, res) => {
 });
 
 // Get session status
-router.get('/auth/status', (req, res) => {
+router.get('/auth/status', async (req, res) => {
+  let funds = null;
+  if (angelOneService.isConnected) {
+    funds = await angelOneService.getFunds();
+  }
   res.json({
     connected: angelOneService.isConnected,
     clientCode: angelOneService.session?.clientcode || null,
-    clientName: angelOneService.session?.clientname || null
+    clientName: angelOneService.session?.clientname || 'Active User',
+    funds
   });
 });
 

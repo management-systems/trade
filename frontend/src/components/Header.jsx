@@ -114,9 +114,17 @@ export default function Header({
 
           {/* Virtual Wallet */}
           <div className="flex items-center bg-emerald-950/20 px-4 py-1.5 rounded-full border border-emerald-500/20 font-mono text-sm font-semibold">
-            <span className="text-emerald-400 mr-1.5">Wallet:</span>
+            <span className="text-emerald-400 mr-1.5">Paper Wallet:</span>
             <span className="text-emerald-300">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
+
+          {/* Angel One Live Margin */}
+          {apiStatus.connected && apiStatus.funds && (
+            <div className="flex items-center bg-orange-950/20 px-4 py-1.5 rounded-full border border-orange-500/20 font-mono text-sm font-semibold">
+              <span className="text-orange-400 mr-1.5">Live Funds:</span>
+              <span className="text-orange-300">₹{apiStatus.funds.availableMargin.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          )}
 
           {/* Angel One API Connection Info */}
           {apiStatus.connected ? (

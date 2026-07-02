@@ -177,6 +177,24 @@ class AngelOneService extends EventEmitter {
     }
     return null;
   }
+
+  // Fetches live user funds & cash margin limits
+  async getFunds() {
+    if (!this.isConnected || !this.smartapi) return null;
+    try {
+      const response = await this.smartapi.getRMS();
+      if (response && response.status && response.data) {
+        return {
+          availableMargin: parseFloat(response.data.net || 0),
+          collateral: parseFloat(response.data.collateral || 0),
+          utilised: parseFloat(response.data.utilised || 0)
+        };
+      }
+    } catch (e) {
+      console.error("AngelOne: Fetching RMS limits failed:", e.message || e);
+    }
+    return null;
+  }
 }
 
 export default new AngelOneService();

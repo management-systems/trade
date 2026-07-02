@@ -62,6 +62,11 @@ export default function App() {
   useEffect(() => {
     syncSystemState();
 
+    // Poll live credentials status and account funds every 10 seconds
+    const statusInterval = setInterval(() => {
+      syncSystemState();
+    }, 10000);
+
     // Establish WebSocket Connection
     socket.connect();
     
@@ -111,6 +116,7 @@ export default function App() {
     });
 
     return () => {
+      clearInterval(statusInterval);
       socket.close();
     };
   }, []);
