@@ -78,7 +78,7 @@ router.get('/paper/state', async (req, res) => {
 
 // Place a mock order
 router.post('/paper/order', async (req, res) => {
-  const { symbol, type, optionType, strike, entryPrice, quantity, slPoints, targetPoints, isAutoSignal } = req.body;
+  const { symbol, type, optionType, strike, entryPrice, quantity, slPoints, targetPoints, isAutoSignal, entryCriteria } = req.body;
   
   try {
     const newPos = await paperTrader.placeOrder({
@@ -90,7 +90,8 @@ router.post('/paper/order', async (req, res) => {
       quantity: parseInt(quantity),
       slPoints: slPoints ? parseFloat(slPoints) : null,
       targetPoints: targetPoints ? parseFloat(targetPoints) : null,
-      isAutoSignal: !!isAutoSignal
+      isAutoSignal: !!isAutoSignal,
+      entryCriteria
     });
     res.json({ success: true, position: newPos });
   } catch (error) {

@@ -8,7 +8,9 @@ export default function PaperTrade({
   selectedPreFill, 
   onClosePreFill, 
   onRefresh,
-  liveModeActive
+  liveModeActive,
+  marketData,
+  customSignal
 }) {
   const { positions = [], risk = {} } = paperState || {};
 
@@ -115,7 +117,15 @@ export default function PaperTrade({
           quantity: qtyNum,
           slPoints: slNum,
           targetPoints: tgtNum,
-          isAutoSignal: false
+          isAutoSignal: false,
+          entryCriteria: {
+            niftySpot: marketData?.niftySpot || 0,
+            indiaVix: marketData?.indiaVix || 0,
+            bias: customSignal?.bias || 0,
+            ceConfidence: customSignal?.ceConfidence || 0,
+            peConfidence: customSignal?.peConfidence || 0,
+            reasons: ["Manual Order Entry"]
+          }
         });
         setSuccess('Order filled! Position created.');
       }

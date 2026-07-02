@@ -372,7 +372,15 @@ export default function App() {
           strike,
           entryPrice: marketData.optionChain.find(i => i.strike === strike)?.[optionType === 'CE' ? 'ce' : 'pe'].ltp || 10,
           quantity: 25, 
-          isAutoSignal: true
+          isAutoSignal: true,
+          entryCriteria: {
+            niftySpot: marketData.niftySpot,
+            indiaVix: marketData.indiaVix,
+            bias: customSignal.bias,
+            ceConfidence: customSignal.ceConfidence,
+            peConfidence: customSignal.peConfidence,
+            reasons: customSignal.reasons
+          }
         });
         syncSystemState();
       }
@@ -587,6 +595,8 @@ export default function App() {
               onClosePreFill={() => setSelectedPreFill(null)}
               onRefresh={syncSystemState}
               liveModeActive={liveModeActive}
+              marketData={marketData}
+              customSignal={customSignal}
             />
 
             {/* Trade History Executions Log */}

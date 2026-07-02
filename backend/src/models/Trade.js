@@ -17,7 +17,8 @@ const TradeSchema = new mongoose.Schema({
   exitTime: { type: Date },
   pnl: { type: Number },
   reason: { type: String },
-  isAutoSignal: { type: Boolean, default: false }
+  isAutoSignal: { type: Boolean, default: false },
+  entryCriteria: { type: mongoose.Schema.Types.Mixed }
 });
 
 export default mongoose.model('Trade', TradeSchema);

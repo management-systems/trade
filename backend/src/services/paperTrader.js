@@ -104,7 +104,7 @@ class PaperTrader {
     };
   }
 
-  async placeOrder({ symbol, type, optionType, strike, entryPrice, quantity, slPoints, targetPoints, isAutoSignal = false }) {
+  async placeOrder({ symbol, type, optionType, strike, entryPrice, quantity, slPoints, targetPoints, isAutoSignal = false, entryCriteria }) {
     await this.ensureLoaded();
 
     // 1. Check daily risk boundaries
@@ -143,7 +143,8 @@ class PaperTrader {
       slPoints: sl,
       targetPoints: target,
       entryTime: new Date(),
-      isAutoSignal
+      isAutoSignal,
+      entryCriteria
     };
 
     // Deduct margin from balance
