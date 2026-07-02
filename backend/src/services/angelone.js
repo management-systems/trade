@@ -53,7 +53,7 @@ class AngelOneService extends EventEmitter {
       return {
         status: true,
         message: "Successfully connected to Angel One API",
-        clientName: this.session.clientname,
+        clientName: this.session.clientname || 'Active User',
         clientCode: code
       };
     } catch (error) {
@@ -73,7 +73,7 @@ class AngelOneService extends EventEmitter {
         jwttoken: this.session.jwtToken,
         apikey: apiKey,
         clientcode: clientCode,
-        feedtype: 'mktdatalong'
+        feedtype: this.session.feedToken
       });
 
       await this.ws.connect();
