@@ -178,7 +178,10 @@ export default function App() {
 
   const isMarketOpen = () => {
     const now = new Date();
-    const istTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    // Get UTC time in milliseconds, add 5.5 hours for IST offset (19800000 ms)
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const istTime = new Date(utc + 19800000);
+    
     const day = istTime.getDay(); // 0 = Sunday, 6 = Saturday
     if (day === 0 || day === 6) return false;
     
