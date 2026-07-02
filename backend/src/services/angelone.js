@@ -171,7 +171,12 @@ class AngelOneService extends EventEmitter {
   async getMarketQuotes(tokens) {
     if (!this.isConnected || !this.smartapi) return null;
     try {
-      const response = await this.smartapi.getMarketData("FULL", { "NFO": tokens });
+      const response = await this.smartapi.marketData({
+        mode: "FULL",
+        exchangeTokens: {
+          "NFO": tokens
+        }
+      });
       if (response && response.status && response.data) {
         return response.data.fetched || [];
       }

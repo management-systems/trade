@@ -1,3 +1,4 @@
+import scripMaster from './services/scripMaster.js';
 import angelOneService from './services/angelone.js';
 import dotenv from 'dotenv';
 
@@ -21,6 +22,22 @@ async function testConnection() {
     console.log(`Client Name: ${result.clientName}`);
     console.log(`Status Message: ${result.message}`);
     
+    // Load scrips and query an active options contract token
+    console.log("Initializing Scrip Master cache...");
+    await scripMaster.initialize();
+    
+    // Get a valid Nifty Strike option (e.g. 24000 CE)
+    const contracts = scripMaster.getStrikeContracts('NIFTY', [24000]);
+    if (contracts && contracts.length > 0 && contracts[0].ce) {
+      const targetToken = contracts[0].ce.token;
+      const targetSymbol = contracts[0].ce.symbol;
+      console.log(`\nFetching sample market quote for NIFTY Option contract (Token ${targetToken}, Symbol ${targetSymbol})...`);
+      const quotes = await angelOneService.getMarketQuotes([targetToken]);
+      console.log("Quote response:", JSON.stringify(quotes));
+    } else {
+      console.log("\nNo active NIFTY 24000 CE contract found in cache.");
+    }
+
     // Disconnect so the script exits
     angelOneService.logout();
     process.exit(0);

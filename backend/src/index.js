@@ -83,6 +83,9 @@ angelOneService.on('spotTick', ({ index, price }) => {
   }
 });
 
+// Storing previous OI values to calculate live OI Change (%) dynamically
+const prevOiMap = new Map();
+
 // Main Tick Loop: simulator emits updates every second
 marketSimulator.on('tick', async (marketData) => {
   // Sync the live mode state to block simulated movements when connected
@@ -120,23 +123,42 @@ marketSimulator.on('tick', async (marketData) => {
             const ceQuote = c.ce ? quoteMap[c.ce.token] : null;
             const peQuote = c.pe ? quoteMap[c.pe.token] : null;
 
+            const ceOi = ceQuote ? parseInt(ceQuote.opnInterest || 0) : 0;
+            const peOi = peQuote ? parseInt(peQuote.opnInterest || 0) : 0;
+
+            let ceOiChange = 0;
+            let peOiChange = 0;
+
+            if (c.ce) {
+              if (prevOiMap.has(c.ce.token)) {
+                ceOiChange = ceOi - prevOiMap.get(c.ce.token);
+              }
+              prevOiMap.set(c.ce.token, ceOi);
+            }
+            if (c.pe) {
+              if (prevOiMap.has(c.pe.token)) {
+                peOiChange = peOi - prevOiMap.get(c.pe.token);
+              }
+              prevOiMap.set(c.pe.token, peOi);
+            }
+
             return {
               strike: c.strike,
               ce: {
                 symbol: c.ce ? c.ce.symbol : `NIFTY26JUL${c.strike}CE`,
                 ltp: ceQuote ? parseFloat(ceQuote.ltp || 0) : (c.ce ? 10 : 0),
-                oi: ceQuote ? parseInt(ceQuote.openInterest || 0) : 0,
-                oiChange: ceQuote ? parseInt(ceQuote.oiChange || 0) : 0,
-                oiChangePercent: ceQuote ? parseFloat(ceQuote.oiChangePercent || 0) : 0,
-                volume: ceQuote ? parseInt(ceQuote.volume || 0) : 0
+                oi: ceOi,
+                oiChange: ceOiChange,
+                oiChangePercent: ceOiChange && ceOi ? parseFloat(((ceOiChange / (ceOi - ceOiChange)) * 100).toFixed(2)) : 0,
+                volume: ceQuote ? parseInt(ceQuote.tradeVolume || 0) : 0
               },
               pe: {
                 symbol: c.pe ? c.pe.symbol : `NIFTY26JUL${c.strike}PE`,
                 ltp: peQuote ? parseFloat(peQuote.ltp || 0) : (c.pe ? 10 : 0),
-                oi: peQuote ? parseInt(peQuote.openInterest || 0) : 0,
-                oiChange: peQuote ? parseInt(peQuote.oiChange || 0) : 0,
-                oiChangePercent: peQuote ? parseFloat(peQuote.oiChangePercent || 0) : 0,
-                volume: peQuote ? parseInt(peQuote.volume || 0) : 0
+                oi: peOi,
+                oiChange: peOiChange,
+                oiChangePercent: peOiChange && peOi ? parseFloat(((peOiChange / (peOi - peOiChange)) * 100).toFixed(2)) : 0,
+                volume: peQuote ? parseInt(peQuote.tradeVolume || 0) : 0
               }
             };
           });

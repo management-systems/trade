@@ -51,7 +51,7 @@ class ScripMasterService {
           item.exch_seg === 'NFO' &&
           item.instrumenttype === 'OPTIDX'
         ) {
-          const strike = parseFloat(item.strike);
+          const strike = parseFloat(item.strike) / 100;
           const optionType = item.symbol.endsWith('CE') ? 'CE' : 'PE';
 
           const cleanItem = {
