@@ -112,57 +112,51 @@ export default function Header({
             <span className="text-slate-300">{isConnected ? 'FEED CONNECTED' : 'FEED OFFLINE'}</span>
           </div>
 
-          {/* Virtual Wallet */}
-          <div className="flex items-center bg-emerald-950/20 px-4 py-1.5 rounded-full border border-emerald-500/20 font-mono text-sm font-semibold">
-            <span className="text-emerald-400 mr-1.5">Paper Wallet:</span>
-            <span className="text-emerald-300">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-
-          {/* Angel One Live Margin */}
-          {apiStatus.connected && apiStatus.funds && (
-            <div className="flex items-center bg-orange-950/20 px-4 py-1.5 rounded-full border border-orange-500/20 font-mono text-sm font-semibold">
-              <span className="text-orange-400 mr-1.5">Live Funds:</span>
-              <span className="text-orange-300">₹{apiStatus.funds.availableMargin.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            </div>
-          )}
-
-          {/* Angel One API Connection Info */}
-          {apiStatus.connected ? (
-            <div className="flex items-center bg-orange-950/20 px-3 py-1.5 rounded-full border border-orange-500/20 text-xs">
-              <CheckCircle className="h-4 w-4 text-orange-400 mr-2" />
-              <span className="text-orange-300 font-mono mr-2">{apiStatus.clientCode} ({apiStatus.clientName})</span>
-              <button 
-                onClick={handleLogout}
-                className="text-slate-400 hover:text-slate-200 ml-1.5"
-                title="Disconnect from Angel One"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
+          {/* Active Balance Display based on Mode */}
+          {!liveModeActive ? (
+            <div className="flex items-center bg-emerald-950/20 px-4 py-1.5 rounded-full border border-emerald-500/20 font-mono text-sm font-semibold">
+              <span className="text-emerald-400 mr-1.5">Paper Wallet:</span>
+              <span className="text-emerald-300">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
           ) : (
-            <button 
-              onClick={() => setShowConfigModal(true)}
-              className="flex items-center bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-full border border-slate-700 text-xs font-medium transition"
-            >
-              <Key className="h-4 w-4 text-emerald-400 mr-2" />
-              Angel One Login
-            </button>
+            apiStatus.connected && apiStatus.funds && (
+              <div className="flex items-center bg-orange-950/20 px-4 py-1.5 rounded-full border border-orange-500/20 font-mono text-sm font-semibold animate-pulse">
+                <span className="text-orange-400 mr-1.5">Live Funds:</span>
+                <span className="text-orange-300">₹{apiStatus.funds.availableMargin.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            )
           )}
 
-          {/* Live Mode Toggle */}
-          <div className="flex items-center space-x-2 bg-slate-900/40 px-3 py-1 rounded-full border border-slate-800">
-            <span className="text-xs font-mono text-slate-400 uppercase">Live Mode</span>
+          {/* Angel One Connection Indicator */}
+          {apiStatus.connected && (
+            <div className="flex items-center bg-slate-900/60 px-3 py-1.5 rounded-full border border-slate-800 text-xs">
+              <CheckCircle className="h-4 w-4 text-emerald-400 mr-2" />
+              <span className="text-slate-300 font-mono">{apiStatus.clientCode} ({apiStatus.clientName})</span>
+            </div>
+          )}
+
+          {/* Mode Switcher Segmented Control */}
+          <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 font-mono text-xs select-none">
             <button
-              onClick={toggleLiveMode}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                liveModeActive ? 'bg-rose-600' : 'bg-slate-700'
+              onClick={() => { if (liveModeActive) setLiveModeActive(false); }}
+              className={`px-4 py-1.5 rounded-lg font-bold transition duration-200 ${
+                !liveModeActive 
+                  ? 'bg-emerald-500 text-slate-950 shadow font-extrabold' 
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  liveModeActive ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
+              PAPER TRADING
+            </button>
+            <button
+              onClick={toggleLiveMode}
+              className={`px-4 py-1.5 rounded-lg font-bold transition duration-200 flex items-center ${
+                liveModeActive 
+                  ? 'bg-rose-600 text-white shadow font-extrabold' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full mr-1.5 ${liveModeActive ? 'bg-white animate-ping' : 'bg-rose-500'}`}></span>
+              ANGEL LIVE
             </button>
           </div>
         </div>

@@ -40,6 +40,9 @@ export const api = {
   placePaperOrder: (orderParams) => request('/paper/order', { method: 'POST', body: orderParams }),
   closePaperPosition: (positionId, exitPrice, reason) => 
     request('/paper/close', { method: 'POST', body: { positionId, exitPrice, reason } }),
+  
+  // Live Trading
+  placeLiveOrder: (orderParams) => request('/live/order', { method: 'POST', body: orderParams }),
 
   // Risk Management
   getRiskConfig: () => request('/risk/config'),

@@ -145,4 +145,21 @@ router.post('/risk/reset', async (req, res) => {
   }
 });
 
+// Place a real-money live order via Angel One SmartAPI
+router.post('/live/order', async (req, res) => {
+  const { symbol, strike, quantity, transactionType, optionType } = req.body;
+  try {
+    const result = await angelOneService.placeOrder({
+      symbol,
+      strike: parseInt(strike),
+      quantity: parseInt(quantity),
+      transactionType: transactionType || 'BUY',
+      optionType
+    });
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

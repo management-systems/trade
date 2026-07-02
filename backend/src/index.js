@@ -207,6 +207,25 @@ async function boot() {
     console.error("ScripMaster: Initialization failed:", err);
   }
 
+  // Auto-login to Angel One if credentials are provided in .env
+  const { CLIENT_CODE, PASSWORD, API_KEY, TOTP_SECRET } = config.ANGEL_ONE;
+  if (CLIENT_CODE && PASSWORD && API_KEY && TOTP_SECRET) {
+    console.log("AngelOne: Credentials detected in .env. Attempting auto-login...");
+    try {
+      await angelOneService.login({
+        clientCode: CLIENT_CODE,
+        password: PASSWORD,
+        apiKey: API_KEY,
+        totpSecret: TOTP_SECRET
+      });
+      console.log("AngelOne: Auto-login successful and stream connected.");
+    } catch (err) {
+      console.error("AngelOne: Auto-login failed on startup:", err.message || err);
+    }
+  } else {
+    console.log("AngelOne: Credentials missing in .env. Running in standalone local simulator mode.");
+  }
+
   // Start market data loop
   marketSimulator.start();
   console.log("Simulator: High-fidelity tick engine started.");
