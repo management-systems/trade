@@ -63,6 +63,14 @@ export default function PaperTrade({
     setError('');
     setSuccess('');
 
+    // PIN Verification for any manual buy
+    const pin = prompt("Enter your 4-digit security PIN to authorize this trade:");
+    if (pin === null) return; // User clicked Cancel
+    if (pin.trim() !== '1232') {
+      setError('Incorrect security PIN. Trade authorization aborted.');
+      return;
+    }
+
     const strikeNum = parseInt(formData.strike);
     const qtyNum = parseInt(formData.quantity);
     const priceNum = parseFloat(formData.entryPrice);
@@ -87,17 +95,15 @@ export default function PaperTrade({
       const symbol = `NIFTY26JUL${strikeNum}${formData.optionType}`;
 
       if (liveModeActive) {
-        // In real live mode, order places through API
-        alert(`LIVE MODE: Placing real market order for ${qtyNum} shares of ${symbol} at ₹${priceNum}.`);
-        await api.loginAngelOne(); // verifying session
-        const result = await api.placeOrder({
+        // In real live mode, order places through actual Angel One API
+        const result = await api.placeLiveOrder({
           symbol,
           strike: strikeNum,
           quantity: qtyNum,
           transactionType: 'BUY',
           optionType: formData.optionType
         });
-        setSuccess(`Live order placed! Trans ID: ${result.data?.orderid}`);
+        setSuccess(`Live order placed! Trans ID: ${result.result?.data?.orderid || result.result?.orderid || 'Success'}`);
       } else {
         // Paper Order
         await api.placePaperOrder({
@@ -322,14 +328,14 @@ export default function PaperTrade({
           <button
             type="submit"
             disabled={risk.limitHit}
-            className={`w-full flex items-center justify-center py-2 rounded-lg font-bold text-slate-950 transition ${
+            className={`w-full flex items-center justify-center py-2 rounded-lg font-bold transition ${
               risk.limitHit 
-                ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
-                : 'bg-emerald-400 hover:bg-emerald-300'
+                ? 'bg-slate-850 text-slate-500 cursor-not-allowed border border-slate-800' 
+                : 'bg-emerald-400 hover:bg-emerald-300 text-slate-950'
             }`}
           >
             <ShoppingCart className="h-4 w-4 mr-1.5" />
-            {liveModeActive ? 'Place Market Order' : 'Buy Option'}
+            {liveModeActive ? 'Place Live Order' : 'Buy Option'}
           </button>
         </form>
       </div>

@@ -79,12 +79,12 @@ export default function Header({
   };
 
   const confirmLiveMode = () => {
-    if (safetyText.trim().toUpperCase() === 'CONFIRM') {
+    if (safetyText.trim() === '1232') {
       setLiveModeActive(true);
       setShowSafetyModal(false);
       setSafetyText('');
     } else {
-      alert("Invalid safety confirmation text. Please type 'CONFIRM'.");
+      alert("Incorrect PIN. Access to Live Mode denied.");
     }
   };
 
@@ -266,21 +266,22 @@ export default function Header({
               </p>
               
               <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 font-mono text-[11px] text-slate-400">
-                - Simulator pricing remains active for visual dashboard data.<br />
-                - Live order placement is routed via NSE options contracts.<br />
-                - All order executions will require your direct click-through action.
+                - Live fund balances and real-market quotes will be active.<br />
+                - Live order placement functionality is locked for account safety.<br />
+                - To place paper trades, toggle back to Paper Trading.
               </div>
 
               <div>
                 <label className="block text-xs font-mono text-slate-400 mb-1.5">
-                  Type <strong className="text-slate-200">CONFIRM</strong> below to enable Live Mode:
+                  Enter your 4-digit trading PIN to enable Live Mode:
                 </label>
                 <input 
-                  type="text" 
+                  type="password" 
+                  maxLength="4"
                   value={safetyText} 
                   onChange={(e) => setSafetyText(e.target.value)} 
-                  placeholder="CONFIRM"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 font-mono uppercase focus:outline-none focus:border-rose-500 transition"
+                  placeholder="••••"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 font-mono tracking-widest text-center focus:outline-none focus:border-rose-500 transition"
                 />
               </div>
 
