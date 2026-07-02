@@ -56,16 +56,6 @@ export default function CriteriaPanel({ settings, onToggle, thresholds, onThresh
   // Indicators list structure
   const indicatorsList = [
     {
-      id: 'vwap',
-      name: 'VWAP Boundary',
-      liveValue: `Spot: ₹${spot.toFixed(1)} | VWAP: ₹${vwap.toFixed(1)}`,
-      ceCondition: `Spot > VWAP`,
-      peCondition: `Spot < VWAP`,
-      ceMet: ceVwapMet,
-      peMet: peVwapMet,
-      weight: '25%'
-    },
-    {
       id: 'structure',
       name: 'Market Structure Trend',
       liveValue: `Trend: ${indicators.structure?.trend || 'NEUTRAL'} [H: ₹${Math.round(indicators.structure?.currentHigh || 0)} | L: ₹${Math.round(indicators.structure?.currentLow || 0)}]`,
@@ -73,7 +63,17 @@ export default function CriteriaPanel({ settings, onToggle, thresholds, onThresh
       peCondition: 'High < Prev High & Low < Prev Low',
       ceMet: indicators.structure?.trend === 'BULLISH',
       peMet: indicators.structure?.trend === 'BEARISH',
-      weight: '+20 Score'
+      weight: 20
+    },
+    {
+      id: 'vwap',
+      name: 'VWAP Boundary Cross',
+      liveValue: `Spot: ₹${spot.toFixed(1)} | VWAP: ₹${vwap.toFixed(1)}`,
+      ceCondition: `Spot > VWAP`,
+      peCondition: `Spot < VWAP`,
+      ceMet: ceVwapMet,
+      peMet: peVwapMet,
+      weight: 10
     },
     {
       id: 'ema',
@@ -83,47 +83,37 @@ export default function CriteriaPanel({ settings, onToggle, thresholds, onThresh
       peCondition: 'EMA 20 < EMA 50',
       ceMet: ceEmaMet,
       peMet: peEmaMet,
-      weight: '25%'
+      weight: 10
     },
     {
       id: 'breakout',
-      name: 'Support & Resistance Floor',
+      name: 'Support & Resistance Break',
       liveValue: `Resist: ₹${resistance.toFixed(1)} | Supp: ₹${support.toFixed(1)}`,
       ceCondition: 'Spot > Resistance',
       peCondition: 'Spot < Support',
       ceMet: ceBreakoutMet,
       peMet: peBreakoutMet,
-      weight: '20%'
+      weight: 15
     },
     {
       id: 'volume',
-      name: 'Volume Expansion',
+      name: 'Volume Expansion Rate',
       liveValue: `Vol: ${latestVolume.toLocaleString()} | MA: ${(Math.round(avgVolume * thresholds.volumeMult)).toLocaleString()}`,
       ceCondition: `Vol > MA * ${thresholds.volumeMult}`,
       peCondition: `Vol > MA * ${thresholds.volumeMult}`,
       ceMet: volumeMet,
       peMet: volumeMet,
-      weight: '15%'
+      weight: 10
     },
     {
-      id: 'rsi',
-      name: 'RSI Momentum Oscillator',
-      liveValue: `RSI: ${rsi.toFixed(1)}`,
-      ceCondition: `RSI > ${thresholds.rsiBullish}`,
-      peCondition: `RSI < ${thresholds.rsiBearish}`,
-      ceMet: ceRsiMet,
-      peMet: peRsiMet,
-      weight: '15%'
-    },
-    {
-      id: 'macd',
-      name: 'MACD Trend Oscillator',
-      liveValue: `MACD: ${macdData.macd.toFixed(2)} | Sig: ${macdData.signal.toFixed(2)}`,
-      ceCondition: 'MACD > Signal Line',
-      peCondition: 'MACD < Signal Line',
-      ceMet: ceMacdMet,
-      peMet: peMacdMet,
-      weight: '15%'
+      id: 'vix',
+      name: 'Futures OI / Volatility',
+      liveValue: `VIX: ${vix.toFixed(2)}% | Futures OI Chg: ${(marketData.futuresOiChange || 0).toLocaleString()}`,
+      ceCondition: `VIX < ${thresholds.vixMax}% & Fut OI > 0`,
+      peCondition: `VIX < ${thresholds.vixMax}% & Fut OI < 0`,
+      ceMet: vixMet && (marketData.futuresOiChange || 0) > 0,
+      peMet: vixMet && (marketData.futuresOiChange || 0) < 0,
+      weight: 15
     },
     {
       id: 'oi',
@@ -133,17 +123,27 @@ export default function CriteriaPanel({ settings, onToggle, thresholds, onThresh
       peCondition: 'Put Unwind / Call Write',
       ceMet: ceOiMet,
       peMet: peOiMet,
-      weight: '15%'
+      weight: 10
     },
     {
-      id: 'vix',
-      name: 'India VIX Fear Index',
-      liveValue: `VIX: ${vix.toFixed(2)}%`,
-      ceCondition: `VIX < ${thresholds.vixMax}%`,
-      peCondition: `VIX < ${thresholds.vixMax}%`,
-      ceMet: vixMet,
-      peMet: vixMet,
-      weight: 'Safety'
+      id: 'rsi',
+      name: 'RSI Momentum Oscillator',
+      liveValue: `RSI: ${rsi.toFixed(1)}`,
+      ceCondition: `RSI > ${thresholds.rsiBullish}`,
+      peCondition: `RSI < ${thresholds.rsiBearish}`,
+      ceMet: ceRsiMet,
+      peMet: peRsiMet,
+      weight: 5
+    },
+    {
+      id: 'macd',
+      name: 'MACD Trend Oscillator',
+      liveValue: `MACD: ${macdData.macd.toFixed(2)} | Sig: ${macdData.signal.toFixed(2)}`,
+      ceCondition: 'MACD > Signal Line',
+      peCondition: 'MACD < Signal Line',
+      ceMet: ceMacdMet,
+      peMet: peMacdMet,
+      weight: 5
     }
   ];
 
@@ -241,6 +241,7 @@ export default function CriteriaPanel({ settings, onToggle, thresholds, onThresh
               <thead>
                 <tr className="text-slate-500 border-b border-slate-900 uppercase text-[9px] pb-1">
                   <th className="py-2">Rule Parameter</th>
+                  <th className="py-2 text-center">Weight</th>
                   <th className="py-2">Live Value</th>
                   <th className="py-2">CE (Call Option)</th>
                   <th className="py-2">PE (Put Option)</th>
@@ -254,6 +255,7 @@ export default function CriteriaPanel({ settings, onToggle, thresholds, onThresh
                   return (
                     <tr key={item.id} className={`hover:bg-slate-900/10 ${!isEnabled ? 'opacity-40 bg-slate-950/20' : ''}`}>
                       <td className="py-3 font-semibold text-slate-200">{item.name}</td>
+                      <td className="py-3 text-center text-slate-400 font-bold">{item.weight}</td>
                       <td className="py-3 text-slate-400">{item.liveValue}</td>
                       
                       {/* CE Condition status */}
