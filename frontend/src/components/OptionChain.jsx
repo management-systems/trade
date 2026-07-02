@@ -15,6 +15,10 @@ export default function OptionChain({ optionChain, niftySpot, onSelectContract }
   // Find ATM strike
   const atmStrike = Math.round(niftySpot / 50) * 50;
 
+  // Find highest Open Interest strikes
+  const maxCeOi = Math.max(...optionChain.map(row => row.ce?.oi || 0));
+  const maxPeOi = Math.max(...optionChain.map(row => row.pe?.oi || 0));
+
   return (
     <div className="glass-panel rounded-2xl border border-slate-800 overflow-hidden flex flex-col h-full">
       <div className="p-4 border-b border-slate-800 bg-slate-900/40 flex items-center justify-between">
@@ -55,6 +59,9 @@ export default function OptionChain({ optionChain, niftySpot, onSelectContract }
               const isAtm = row.strike === atmStrike;
               const isItmCe = row.strike < niftySpot;
               const isItmPe = row.strike > niftySpot;
+              
+              const isMaxCeOi = row.ce.oi === maxCeOi && maxCeOi > 0;
+              const isMaxPeOi = row.pe.oi === maxPeOi && maxPeOi > 0;
 
               return (
                 <tr 
@@ -76,8 +83,10 @@ export default function OptionChain({ optionChain, niftySpot, onSelectContract }
                   </td>
 
                   {/* CE: OI */}
-                  <td className={`py-2.5 px-1.5 text-slate-300 ${isItmCe ? 'bg-emerald-950/5' : ''}`}>
-                    {Math.round(row.ce.oi / 1000)}k
+                  <td className={`py-2.5 px-1.5 text-slate-350 ${
+                    isMaxCeOi ? 'text-yellow-400 bg-yellow-950/20 border border-yellow-800/30 font-bold rounded' : ''
+                  } ${isItmCe ? 'bg-emerald-950/5' : ''}`}>
+                    {Math.round(row.ce.oi / 1000)}k {isMaxCeOi && <span className="text-[7px] bg-yellow-500 text-slate-950 px-1 py-0.5 rounded font-extrabold ml-1">MAX</span>}
                   </td>
 
                   {/* CE: LTP + Buy Trigger */}
@@ -116,8 +125,10 @@ export default function OptionChain({ optionChain, niftySpot, onSelectContract }
                   </td>
 
                   {/* PE: OI */}
-                  <td className={`py-2.5 px-1.5 text-slate-300 ${isItmPe ? 'bg-rose-950/5' : ''}`}>
-                    {Math.round(row.pe.oi / 1000)}k
+                  <td className={`py-2.5 px-1.5 text-slate-350 ${
+                    isMaxPeOi ? 'text-yellow-400 bg-yellow-950/20 border border-yellow-800/30 font-bold rounded' : ''
+                  } ${isItmPe ? 'bg-rose-950/5' : ''}`}>
+                    {Math.round(row.pe.oi / 1000)}k {isMaxPeOi && <span className="text-[7px] bg-yellow-500 text-slate-950 px-1 py-0.5 rounded font-extrabold ml-1">MAX</span>}
                   </td>
 
                   {/* PE: OI Chg% */}

@@ -1,36 +1,18 @@
 import React from 'react';
-import { ArrowUpCircle, ArrowDownCircle, AlertCircle, PlayCircle, Lock } from 'lucide-react';
+import { ArrowUpCircle, ArrowDownCircle, AlertCircle, PlayCircle, Lock, ShieldAlert, Award } from 'lucide-react';
 
-export default function SignalPanel({ signal, riskLimitHit, onExecuteTrade, liveModeActive }) {
-  const { type, confidence, reasons = [], atmStrike, ceConfidence = 0, peConfidence = 0 } = signal || { 
-    type: 'NO TRADE', 
-    confidence: 0, 
-    reasons: ['Establishing feed connection...'], 
-    atmStrike: null,
-    ceConfidence: 0,
-    peConfidence: 0
-  };
-
-  // Visual formatting parameters based on trade recommendations
-  let cardStyles = "border-slate-800 bg-slate-900/20";
-  let badgeStyles = "bg-slate-800 text-slate-400 border-slate-700";
-  let Icon = AlertCircle;
-  let textGrad = "from-slate-400 to-slate-200";
-  let glowColor = "rgba(100, 116, 139, 0.15)";
-  
-  if (type === 'BUY CE') {
-    cardStyles = "border-emerald-500/30 bg-emerald-950/10 shadow-lg shadow-emerald-950/20 border-t-4 border-t-emerald-500";
-    badgeStyles = "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
-    Icon = ArrowUpCircle;
-    textGrad = "from-emerald-400 to-teal-300";
-    glowColor = "rgba(16, 185, 129, 0.25)";
-  } else if (type === 'BUY PE') {
-    cardStyles = "border-rose-500/30 bg-rose-950/10 shadow-lg shadow-rose-950/20 border-t-4 border-t-rose-500";
-    badgeStyles = "bg-rose-500/10 text-rose-400 border-rose-500/30";
-    Icon = ArrowDownCircle;
-    textGrad = "from-rose-400 to-orange-300";
-    glowColor = "rgba(239, 68, 68, 0.25)";
-  }
+export default function SignalPanel({ signal, riskLimitHit, onExecuteTrade, liveModeActive, indiaVix }) {
+  const { 
+    type = 'NO TRADE', 
+    confidence = 0, 
+    reasons = [], 
+    atmStrike = 24100, 
+    ceConfidence = 0, 
+    peConfidence = 0,
+    ceList = [],
+    peList = [],
+    bias = 0
+  } = signal || {};
 
   const hasTradeSignal = type === 'BUY CE' || type === 'BUY PE';
 
@@ -49,149 +31,207 @@ export default function SignalPanel({ signal, riskLimitHit, onExecuteTrade, live
     });
   };
 
+  // Dynamic Stop Loss & Target calculations matching mockup
+  const sl = type === 'BUY CE' ? (atmStrike - 40) : type === 'BUY PE' ? (atmStrike + 40) : '-';
+  const target1 = type === 'BUY CE' ? (atmStrike + 80) : type === 'BUY PE' ? (atmStrike - 80) : '-';
+  const target2 = type === 'BUY CE' ? (atmStrike + 150) : type === 'BUY PE' ? (atmStrike - 150) : '-';
+  const riskLevel = indiaVix > 20 ? 'HIGH' : indiaVix > 15 ? 'MEDIUM' : 'LOW';
+
+  // Badges calculation helpers
+  const getBadgeStatus = (indicatorName) => {
+    const list = type === 'BUY PE' ? peList : ceList;
+    const match = list.find(item => item.name.toLowerCase().includes(indicatorName.toLowerCase()));
+    if (!match) return { label: 'Neutral', color: 'bg-slate-900 text-slate-400 border-slate-800' };
+    
+    if (match.score > 0) {
+      if (indicatorName === 'structure') return { label: 'Very Strong', color: 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' };
+      if (indicatorName === 'vwap' || indicatorName === 'ema') return { label: 'Confirmed', color: 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' };
+      return { label: 'Strong', color: 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' };
+    }
+    return { label: 'Failed', color: 'bg-rose-950/40 text-rose-400 border-rose-900/30' };
+  };
+
+  const msBadge = getBadgeStatus('structure');
+  const oiBadge = getBadgeStatus('option chain');
+  const volBadge = getBadgeStatus('volume');
+  const vwapBadge = getBadgeStatus('vwap');
+  const emaBadge = getBadgeStatus('ema');
+  const vixBadge = indiaVix < 20 
+    ? { label: 'Good', color: 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' }
+    : { label: 'High Vol', color: 'bg-rose-950/40 text-rose-400 border-rose-900/30' };
+
   return (
-    <div 
-      className={`glass-panel p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between h-full ${cardStyles}`}
-      style={{ boxShadow: `0 8px 32px 0 ${glowColor}` }}
-    >
-      <div>
-        {/* Title & Badge Header */}
-        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
-          <span className="text-xs font-mono text-slate-400 tracking-wider">SIGNAL ENGINE</span>
-          <span className={`text-[10px] font-mono border px-2 py-0.5 rounded-full ${badgeStyles}`}>
-            {type}
-          </span>
-        </div>
-
-        {/* Central Display: Signal Indicator & Confidence */}
-        <div className="flex items-center space-x-5">
-          {/* Circular Indicator */}
-          <div className="relative flex items-center justify-center h-16 w-16 flex-shrink-0 bg-slate-950/50 rounded-full border border-slate-800">
-            <Icon className={`h-8 w-8 ${
-              type === 'BUY CE' ? 'text-emerald-400' : type === 'BUY PE' ? 'text-rose-400' : 'text-slate-500'
-            }`} />
-            
-            {/* Confidence Arc (Overlay ring) */}
-            {confidence > 0 && (
-              <svg className="absolute top-0 left-0 w-full h-full transform -rotate-90">
-                <circle
-                  cx="32"
-                  cy="32"
-                  r="29.5"
-                  stroke={type === 'BUY CE' ? '#10b981' : '#ef4444'}
-                  strokeWidth="2"
-                  fill="transparent"
-                  strokeDasharray="185.3"
-                  strokeDashoffset={185.3 - (185.3 * confidence) / 100}
-                />
-              </svg>
-            )}
-          </div>
-
-          <div>
-            <span className="text-[9px] font-mono text-slate-500 uppercase">Recommendation</span>
-            <h4 className={`text-lg font-black bg-gradient-to-r bg-clip-text text-transparent ${textGrad}`}>
-              {type === 'NO TRADE' ? 'NO ACTIVE TRADE' : `${type} @ ${atmStrike || ''}`}
-            </h4>
-            
-            {confidence > 0 ? (
-              <div className="flex items-center space-x-1.5 mt-0.5">
-                <span className="text-[10px] font-mono text-slate-450">Confidence:</span>
-                <span className={`text-[10px] font-bold font-mono ${
-                  confidence >= 75 ? 'text-emerald-400' : 'text-amber-405'
-                }`}>
-                  {confidence}%
-                </span>
-              </div>
-            ) : (
-              <p className="text-[10px] text-slate-500 font-mono mt-0.5">Scanning market structure...</p>
-            )}
-          </div>
-        </div>
-
-        {/* Probability comparative gauges */}
-        <div className="mt-5 space-y-3 bg-slate-950/40 p-3.5 rounded-xl border border-slate-900/60">
-          <div className="space-y-1">
-            <div className="flex justify-between text-[9px] font-mono text-slate-400">
-              <span>BUY CE PROBABILITY</span>
-              <span className="text-emerald-400 font-bold">{ceConfidence}%</span>
-            </div>
-            <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-800/40">
-              <div 
-                className="bg-emerald-500 h-full transition-all duration-500" 
-                style={{ width: `${ceConfidence}%` }}
-              ></div>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <div className="flex justify-between text-[9px] font-mono text-slate-400">
-              <span>BUY PE PROBABILITY</span>
-              <span className="text-rose-400 font-bold">{peConfidence}%</span>
-            </div>
-            <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-800/40">
-              <div 
-                className="bg-rose-500 h-full transition-all duration-500" 
-                style={{ width: `${peConfidence}%` }}
-              ></div>
-            </div>
-          </div>
-
-          {hasTradeSignal && (
-            <div className="text-[9px] font-mono text-center text-slate-350 border-t border-slate-900/50 pt-2 mt-1.5">
-              DIFFERENCE: <span className="font-extrabold text-emerald-400">
-                {Math.abs(ceConfidence - peConfidence)}% {type === 'BUY CE' ? 'CALL' : 'PUT'} BREADTH BIAS
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Checklist of met criteria */}
-        <div className="mt-4 space-y-1.5">
-          <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">Conditions met</span>
-          <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
-            {reasons.map((r, i) => (
-              <div key={i} className="flex items-start space-x-1.5 text-[10px]">
-                <span className={`mt-1 h-1.5 w-1.5 rounded-full flex-shrink-0 ${
-                  type === 'BUY CE' ? 'bg-emerald-500' : type === 'BUY PE' ? 'bg-rose-500' : 'bg-slate-500'
-                }`}></span>
-                <span className="text-slate-300 leading-normal font-sans">{r}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Action triggers */}
-      <div className="mt-4 pt-3 border-t border-slate-800/60">
-        {riskLimitHit ? (
-          <div className="flex items-center bg-rose-950/20 border border-rose-900/40 p-2.5 rounded-xl space-x-2">
-            <Lock className="h-4 w-4 text-rose-400 flex-shrink-0" />
-            <span className="text-[9px] font-mono text-rose-450">
-              TRADING HALTED: Daily limits hit.
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full font-mono text-xs text-slate-300">
+      
+      {/* Col 1: AI Trade Parameters Explanation */}
+      <div className="glass-panel p-5 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-4">
+        <div>
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
+            <span className="text-[10px] text-slate-400 tracking-wider font-bold">AI SIGNAL EXPLANATION</span>
+            <span className={`text-[10px] border px-2 py-0.5 rounded ${
+              type === 'BUY CE' ? 'bg-emerald-950 text-emerald-400 border-emerald-800/40' :
+              type === 'BUY PE' ? 'bg-rose-950 text-rose-400 border-rose-800/40' :
+              'bg-slate-900 text-slate-400 border-slate-850'
+            }`}>
+              {type === 'NO TRADE' ? 'SCANNING' : type}
             </span>
           </div>
-        ) : hasTradeSignal ? (
-          <button
-            onClick={handleExecute}
-            className={`w-full flex items-center justify-center py-2 rounded-xl font-semibold text-xs transition ${
-              type === 'BUY CE'
-                ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-950/20'
-                : 'bg-rose-500 hover:bg-rose-400 text-slate-950 shadow-md shadow-rose-950/20'
-            }`}
-          >
-            <PlayCircle className="h-4 w-4 mr-1.5" />
-            {liveModeActive ? 'Place Live Order' : 'Execute Paper Trade'}
-          </button>
-        ) : (
-          <button
-            disabled
-            className="w-full py-2 bg-slate-800 text-slate-500 rounded-xl font-semibold text-xs cursor-not-allowed text-center"
-          >
-            Waiting for Signal...
-          </button>
-        )}
+
+          <div className="space-y-4">
+            <div>
+              <span className="text-[9px] text-slate-500 uppercase block">Execution Setup</span>
+              <h4 className="text-md font-bold text-slate-100 mt-0.5">
+                {type === 'NO TRADE' ? 'SCANNING MARKETS...' : `${type} Trigger @ ${atmStrike}`}
+              </h4>
+            </div>
+
+            {/* SL and Targets */}
+            <div className="grid grid-cols-2 gap-3 bg-slate-950/45 p-3 rounded-xl border border-slate-900">
+              <div>
+                <span className="text-[8px] text-slate-500 block">STOP LOSS</span>
+                <span className="text-rose-400 font-bold text-[11px]">{sl === '-' ? '-' : `₹${sl}`}</span>
+              </div>
+              <div>
+                <span className="text-[8px] text-slate-500 block">RISK INDEX</span>
+                <span className={`font-bold text-[11px] ${riskLevel === 'HIGH' ? 'text-rose-450' : 'text-emerald-400'}`}>
+                  {riskLevel}
+                </span>
+              </div>
+              <div className="border-t border-slate-900/60 pt-2 mt-1">
+                <span className="text-[8px] text-slate-500 block">TARGET 1</span>
+                <span className="text-emerald-400 font-bold text-[11px]">{target1 === '-' ? '-' : `₹${target1}`}</span>
+              </div>
+              <div className="border-t border-slate-900/60 pt-2 mt-1">
+                <span className="text-[8px] text-slate-500 block">TARGET 2</span>
+                <span className="text-emerald-400 font-bold text-[11px]">{target2 === '-' ? '-' : `₹${target2}`}</span>
+              </div>
+            </div>
+
+            {/* Checklist of met criteria */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[9px] text-slate-500 uppercase tracking-wider block">Trigger Factors</span>
+              <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                {reasons.length > 0 ? (
+                  reasons.map((r, i) => (
+                    <div key={i} className="flex items-start space-x-1.5 text-[10px]">
+                      <span className={`mt-1.5 h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                        type === 'BUY CE' ? 'bg-emerald-500' : 'bg-rose-500'
+                      }`}></span>
+                      <span className="text-slate-300 leading-normal">{r}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-slate-550 italic text-[10px]">Evaluating signal triggers...</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Button */}
+        <div className="pt-3 border-t border-slate-800/60">
+          {riskLimitHit ? (
+            <div className="flex items-center bg-rose-950/20 border border-rose-900/40 p-2.5 rounded-xl space-x-2">
+              <Lock className="h-4 w-4 text-rose-400 flex-shrink-0" />
+              <span className="text-[9px] text-rose-450 font-bold">
+                TRADING HALTED: Daily limits hit.
+              </span>
+            </div>
+          ) : hasTradeSignal ? (
+            <button
+              onClick={handleExecute}
+              className={`w-full flex items-center justify-center py-2 rounded-xl font-bold text-[11px] transition ${
+                type === 'BUY CE'
+                  ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-950/20'
+                  : 'bg-rose-500 hover:bg-rose-400 text-slate-950 shadow-md shadow-rose-950/20'
+              }`}
+            >
+              <PlayCircle className="h-4 w-4 mr-1.5" />
+              {liveModeActive ? 'Place Live Order' : 'Execute Paper Trade'}
+            </button>
+          ) : (
+            <button
+              disabled
+              className="w-full py-2 bg-slate-800 text-slate-500 rounded-xl font-bold text-[11px] cursor-not-allowed text-center"
+            >
+              Waiting for Signal...
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Col 2: Extra Features / Factor Badges */}
+      <div className="glass-panel p-5 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-4">
+        <div>
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
+            <span className="text-[10px] text-slate-400 tracking-wider font-bold">FACTOR DIAGNOSTICS</span>
+            <Award className="h-4 w-4 text-emerald-400" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[10px]">
+            <div className="bg-slate-950/40 p-2 rounded-lg border border-slate-900 flex justify-between items-center">
+              <span className="text-slate-500 font-semibold">Structure</span>
+              <span className={`px-1.5 py-0.5 rounded-md border text-[9px] font-bold ${msBadge.color}`}>
+                {msBadge.label}
+              </span>
+            </div>
+
+            <div className="bg-slate-950/40 p-2 rounded-lg border border-slate-900 flex justify-between items-center">
+              <span className="text-slate-500 font-semibold">OI Sentiment</span>
+              <span className={`px-1.5 py-0.5 rounded-md border text-[9px] font-bold ${oiBadge.color}`}>
+                {oiBadge.label}
+              </span>
+            </div>
+
+            <div className="bg-slate-950/40 p-2 rounded-lg border border-slate-900 flex justify-between items-center">
+              <span className="text-slate-500 font-semibold">Volume</span>
+              <span className={`px-1.5 py-0.5 rounded-md border text-[9px] font-bold ${volBadge.color}`}>
+                {volBadge.label}
+              </span>
+            </div>
+
+            <div className="bg-slate-950/40 p-2 rounded-lg border border-slate-900 flex justify-between items-center">
+              <span className="text-slate-500 font-semibold">VWAP Cross</span>
+              <span className={`px-1.5 py-0.5 rounded-md border text-[9px] font-bold ${vwapBadge.color}`}>
+                {vwapBadge.label}
+              </span>
+            </div>
+
+            <div className="bg-slate-950/40 p-2 rounded-lg border border-slate-900 flex justify-between items-center">
+              <span className="text-slate-500 font-semibold">EMA Cross</span>
+              <span className={`px-1.5 py-0.5 rounded-md border text-[9px] font-bold ${emaBadge.color}`}>
+                {emaBadge.label}
+              </span>
+            </div>
+
+            <div className="bg-slate-950/40 p-2 rounded-lg border border-slate-900 flex justify-between items-center">
+              <span className="text-slate-500 font-semibold">India VIX</span>
+              <span className={`px-1.5 py-0.5 rounded-md border text-[9px] font-bold ${vixBadge.color}`}>
+                {vixBadge.label}
+              </span>
+            </div>
+
+            <div className="bg-slate-950/40 p-2 rounded-lg border border-slate-900 flex justify-between items-center col-span-2">
+              <span className="text-slate-500 font-semibold">System Bias</span>
+              <span className={`px-2 py-0.5 rounded-md border text-[9px] font-extrabold ${
+                bias > 15 ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' :
+                bias < -15 ? 'bg-rose-950/40 text-rose-450 border-rose-900/30' :
+                'bg-slate-900 text-slate-400 border-slate-800'
+              }`}>
+                {bias > 15 ? 'BULLISH BIAS' : bias < -15 ? 'BEARISH BIAS' : 'NEUTRAL BIAS'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-950 border border-slate-900/80 p-3 rounded-xl flex items-start space-x-2">
+          <ShieldAlert className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+          <p className="text-[9.5px] text-slate-500 leading-normal">
+            **Diagnostics Log**: Met indicators represent active weight multipliers. Adjust parameters in the Criteria tab to dynamically adapt scoring filters.
+          </p>
+        </div>
+      </div>
+      
     </div>
   );
 }

@@ -9,6 +9,8 @@ import RiskPanel from './components/RiskPanel';
 import HistoryPanel from './components/HistoryPanel';
 import PnLChart from './components/PnLChart';
 import CriteriaPanel from './components/CriteriaPanel';
+import CEDecisionCard from './components/CEDecisionCard';
+import PEDecisionCard from './components/PEDecisionCard';
 import { api } from './services/api';
 import { socket } from './services/socket';
 
@@ -176,7 +178,17 @@ export default function App() {
 
   // Dynamically calculate signals locally based on toggled CE/PE rules & custom thresholds
   const getCustomSignal = () => {
-    const defaultSignal = marketData.signal || { signalType: 'NO TRADE', confidence: 0, reason: 'Waiting for data...', atmStrike: null };
+    const defaultSignal = { 
+      type: 'NO TRADE', 
+      confidence: 0, 
+      reasons: ['Connecting feed...'], 
+      atmStrike: null,
+      ceConfidence: 0,
+      peConfidence: 0,
+      ceList: [],
+      peList: [],
+      bias: 0
+    };
     if (!marketData.niftySpot || !marketData.candles || marketData.candles.length === 0) {
       return defaultSignal;
     }
@@ -185,8 +197,21 @@ export default function App() {
     const indicators = marketData.indicators || {};
     const optionChain = marketData.optionChain || [];
     const vix = marketData.indiaVix || 14.5;
+    const futuresOiChange = marketData.futuresOiChange || 0;
     
-    const { ema20, ema50, vwap, support, resistance, isVolumeExpansion, rsi, macd: macdData, structure } = indicators;
+    const { 
+      ema20 = 0, 
+      ema50 = 0, 
+      vwap = 0, 
+      support = 0, 
+      resistance = 0, 
+      avgVolume = 0, 
+      latestVolume = 0, 
+      isVolumeExpansion = false,
+      rsi = 50,
+      macd: macdData = { macd: 0, signal: 0, histogram: 0 },
+      structure = { trend: 'NEUTRAL' }
+    } = indicators;
     
     // Check if VIX is above max safety limit
     const isVixTooHigh = vix > thresholds.vixMax;
@@ -207,158 +232,62 @@ export default function App() {
     const isPutOiDecreasing = peOiChangeAtmNear < -100;
     const isCallOiIncreasing = ceOiChangeAtmNear > 100;
 
-    let buyCeScore = 0;
-    let totalCeWeight = 0;
-    const ceReasons = [];
+    // CE Analysis checklist
+    const isCeStructureMet = structure.trend === 'BULLISH';
+    const isCeVwapMet = spot > vwap;
+    const isCeEmaMet = ema20 && ema50 && ema20 > ema50;
+    const isCeBreakoutMet = resistance && spot > resistance;
+    const isCeVolumeMet = isVolumeExpansion;
+    const isCeVolumeWeak = !isVolumeExpansion && latestVolume > avgVolume;
+    const isCeFuturesMet = futuresOiChange > 0;
+    const isCeOiMet = isCallOiDecreasing || isPutOiIncreasing;
+    const isCeRsiMet = rsi > thresholds.rsiBullish;
+    const isCeRsiWeak = !isCeRsiMet && rsi > 50;
+    const isCeMacdMet = macdData.macd > macdData.signal;
 
-    // VIX safety filter
-    if (criteriaSettings.vix) {
-      totalCeWeight += 10;
-      if (!isVixTooHigh) {
-        buyCeScore += 10;
-        ceReasons.push(`VIX is safe at ${vix.toFixed(1)}% (<${thresholds.vixMax}%)`);
-      }
-    }
+    const ceList = [
+      { name: 'Market Structure', status: isCeStructureMet ? 'PASS' : 'FAIL', weight: 20, score: isCeStructureMet ? 20 : 0 },
+      { name: 'VWAP', status: isCeVwapMet ? 'PASS' : 'FAIL', weight: 10, score: isCeVwapMet ? 10 : 0 },
+      { name: 'EMA20 > EMA50', status: isCeEmaMet ? 'PASS' : 'FAIL', weight: 10, score: isCeEmaMet ? 10 : 0 },
+      { name: 'Support Break', status: isCeBreakoutMet ? 'PASS' : 'FAIL', weight: 15, score: isCeBreakoutMet ? 15 : 0 },
+      { name: 'Volume', status: isCeVolumeMet ? 'PASS' : (isCeVolumeWeak ? 'WEAK' : 'FAIL'), weight: 10, score: isCeVolumeMet ? 10 : (isCeVolumeWeak ? 5 : 0) },
+      { name: 'Futures OI', status: isCeFuturesMet ? 'PASS' : 'FAIL', weight: 15, score: isCeFuturesMet ? 15 : 0 },
+      { name: 'Option Chain', status: isCeOiMet ? 'PASS' : 'FAIL', weight: 10, score: isCeOiMet ? 10 : 0 },
+      { name: 'RSI', status: isCeRsiMet ? 'PASS' : (isCeRsiWeak ? 'WEAK' : 'FAIL'), weight: 5, score: isCeRsiMet ? 5 : (isCeRsiWeak ? 3 : 1) },
+      { name: 'MACD', status: isCeMacdMet ? 'PASS' : 'FAIL', weight: 5, score: isCeMacdMet ? 5 : 0 }
+    ];
 
-    if (criteriaSettings.vwap) {
-      totalCeWeight += 25;
-      if (spot > vwap) {
-        buyCeScore += 25;
-        ceReasons.push("Spot price is above VWAP (Bullish)");
-      }
-    }
-    if (criteriaSettings.ema) {
-      totalCeWeight += 25;
-      if (ema20 && ema50 && ema20 > ema50) {
-        buyCeScore += 25;
-        ceReasons.push("EMA 20 is above EMA 50 (Golden Cross)");
-      }
-    }
-    if (criteriaSettings.breakout) {
-      totalCeWeight += 20;
-      if (resistance && spot > resistance) {
-        buyCeScore += 20;
-        ceReasons.push(`Spot broke out above resistance ₹${resistance}`);
-      }
-    }
-    if (criteriaSettings.volume) {
-      totalCeWeight += 15;
-      if (isVolumeExpansion) {
-        buyCeScore += 15;
-        ceReasons.push(`Volume is expanding (>1.3x average)`);
-      }
-    }
-    if (criteriaSettings.rsi) {
-      totalCeWeight += 15;
-      if (rsi && rsi > thresholds.rsiBullish) {
-        buyCeScore += 15;
-        ceReasons.push(`RSI is above bullish threshold ${thresholds.rsiBullish} (RSI: ${rsi.toFixed(1)})`);
-      }
-    }
-    if (criteriaSettings.macd) {
-      totalCeWeight += 15;
-      if (macdData && macdData.macd > macdData.signal) {
-        buyCeScore += 15;
-        ceReasons.push(`MACD Line is above Signal Line`);
-      }
-    }
-    if (criteriaSettings.oi) {
-      totalCeWeight += 15;
-      if (isCallOiDecreasing || isPutOiIncreasing) {
-        buyCeScore += 15;
-        if (isCallOiDecreasing && isPutOiIncreasing) {
-          ceReasons.push("Bullish OI: CE unwinding & PE writing");
-        } else if (isCallOiDecreasing) {
-          ceReasons.push("Bullish OI: Calls are unwinding");
-        } else {
-          ceReasons.push("Bullish OI: Puts are written heavily");
-        }
-      }
-    }
-    if (criteriaSettings.structure) {
-      totalCeWeight += 20;
-      if (structure && structure.trend === 'BULLISH') {
-        buyCeScore += 20;
-        ceReasons.push("Market Structure: Higher High & Higher Low (+20 Score)");
-      }
-    }
-    let buyPeScore = 0;
-    let totalPeWeight = 0;
-    const peReasons = [];
+    // PE Analysis checklist
+    const isPeStructureMet = structure.trend === 'BEARISH';
+    const isPeVwapMet = spot < vwap;
+    const isPeEmaMet = ema20 && ema50 && ema20 < ema50;
+    const isPeBreakdownMet = support && spot < support;
+    const isPeVolumeMet = isVolumeExpansion;
+    const isPeVolumeWeak = !isVolumeExpansion && latestVolume > avgVolume;
+    const isPeFuturesMet = futuresOiChange < 0;
+    const isPeOiMet = isPutOiDecreasing || isCallOiIncreasing;
+    const isPeRsiMet = rsi < thresholds.rsiBearish;
+    const isPeRsiWeak = !isPeRsiMet && rsi < 50;
+    const isPeMacdMet = macdData.macd < macdData.signal;
 
-    // VIX safety filter
-    if (criteriaSettings.vix) {
-      totalPeWeight += 10;
-      if (!isVixTooHigh) {
-        buyPeScore += 10;
-        peReasons.push(`VIX is safe at ${vix.toFixed(1)}% (<${thresholds.vixMax}%)`);
-      }
-    }
+    const peList = [
+      { name: 'Market Structure', status: isPeStructureMet ? 'PASS' : 'FAIL', weight: 20, score: isPeStructureMet ? 20 : 0 },
+      { name: 'VWAP', status: isPeVwapMet ? 'PASS' : 'FAIL', weight: 10, score: isPeVwapMet ? 10 : 0 },
+      { name: 'EMA20 < EMA50', status: isPeEmaMet ? 'PASS' : 'FAIL', weight: 10, score: isPeEmaMet ? 10 : 0 },
+      { name: 'Breakdown', status: isPeBreakdownMet ? 'PASS' : 'FAIL', weight: 15, score: isPeBreakdownMet ? 15 : 0 },
+      { name: 'Volume', status: isPeVolumeMet ? 'PASS' : (isPeVolumeWeak ? 'WEAK' : 'FAIL'), weight: 10, score: isPeVolumeMet ? 10 : (isPeVolumeWeak ? 5 : 0) },
+      { name: 'Short Build-up', status: isPeFuturesMet ? 'PASS' : 'FAIL', weight: 15, score: isPeFuturesMet ? 15 : 0 },
+      { name: 'Option Chain', status: isPeOiMet ? 'PASS' : 'FAIL', weight: 10, score: isPeOiMet ? 10 : 0 },
+      { name: 'RSI', status: isPeRsiMet ? 'PASS' : (isPeRsiWeak ? 'WEAK' : 'FAIL'), weight: 5, score: isPeRsiMet ? 5 : (isPeRsiWeak ? 3 : 1) },
+      { name: 'MACD', status: isPeMacdMet ? 'PASS' : 'FAIL', weight: 5, score: isPeMacdMet ? 5 : 0 }
+    ];
 
-    if (criteriaSettings.vwap) {
-      totalPeWeight += 25;
-      if (spot < vwap) {
-        buyPeScore += 25;
-        peReasons.push("Spot price is below VWAP (Bearish)");
-      }
-    }
-    if (criteriaSettings.ema) {
-      totalPeWeight += 25;
-      if (ema20 && ema50 && ema20 < ema50) {
-        buyPeScore += 25;
-        peReasons.push("EMA 20 is below EMA 50 (Death Cross)");
-      }
-    }
-    if (criteriaSettings.breakout) {
-      totalPeWeight += 20;
-      if (support && spot < support) {
-        buyPeScore += 20;
-        peReasons.push(`Spot broke down below support ₹${support}`);
-      }
-    }
-    if (criteriaSettings.volume) {
-      totalPeWeight += 15;
-      if (isVolumeExpansion) {
-        buyPeScore += 15;
-        peReasons.push("Volume is expanding on down move");
-      }
-    }
-    if (criteriaSettings.rsi) {
-      totalPeWeight += 15;
-      if (rsi && rsi < thresholds.rsiBearish) {
-        buyPeScore += 15;
-        peReasons.push(`RSI is below bearish threshold ${thresholds.rsiBearish} (RSI: ${rsi.toFixed(1)})`);
-      }
-    }
-    if (criteriaSettings.macd) {
-      totalPeWeight += 15;
-      if (macdData && macdData.macd < macdData.signal) {
-        buyPeScore += 15;
-        peReasons.push("MACD Line is below Signal Line");
-      }
-    }
-    if (criteriaSettings.oi) {
-      totalPeWeight += 15;
-      if (isPutOiDecreasing || isCallOiIncreasing) {
-        buyPeScore += 15;
-        if (isPutOiDecreasing && isCallOiIncreasing) {
-          peReasons.push("Bearish OI: PE unwinding & CE writing");
-        } else if (isCallOiIncreasing) {
-          peReasons.push("Bearish OI: Calls are written heavily");
-        } else {
-          peReasons.push("Bearish OI: Puts are unwinding");
-        }
-      }
-    }
-    if (criteriaSettings.structure) {
-      totalPeWeight += 20;
-      if (structure && structure.trend === 'BEARISH') {
-        buyPeScore += 20;
-        peReasons.push("Market Structure: Lower High & Lower Low (+20 Score)");
-      }
-    }
-    const ceConfidence = totalCeWeight > 0 ? Math.round((buyCeScore / totalCeWeight) * 100) : 0;
-    const peConfidence = totalPeWeight > 0 ? Math.round((buyPeScore / totalPeWeight) * 100) : 0;
+    // Calculate dynamic scores based on rules configuration
+    const ceScore = ceList.reduce((sum, item) => sum + (criteriaSettings[item.name.toLowerCase().includes('structure') ? 'structure' : item.name.toLowerCase().includes('vwap') ? 'vwap' : item.name.toLowerCase().includes('ema') ? 'ema' : item.name.toLowerCase().includes('support') || item.name.toLowerCase().includes('breakdown') ? 'breakout' : item.name.toLowerCase().includes('volume') ? 'volume' : item.name.toLowerCase().includes('futures') || item.name.toLowerCase().includes('short') ? 'vix' : item.name.toLowerCase().includes('option') ? 'oi' : item.name.toLowerCase().includes('rsi') ? 'rsi' : 'macd'] !== false ? item.score : 0), 0);
+    const peScore = peList.reduce((sum, item) => sum + (criteriaSettings[item.name.toLowerCase().includes('structure') ? 'structure' : item.name.toLowerCase().includes('vwap') ? 'vwap' : item.name.toLowerCase().includes('ema') ? 'ema' : item.name.toLowerCase().includes('support') || item.name.toLowerCase().includes('breakdown') ? 'breakout' : item.name.toLowerCase().includes('volume') ? 'volume' : item.name.toLowerCase().includes('short') || item.name.toLowerCase().includes('futures') ? 'vix' : item.name.toLowerCase().includes('option') ? 'oi' : item.name.toLowerCase().includes('rsi') ? 'rsi' : 'macd'] !== false ? item.score : 0), 0);
+
+    const ceConfidence = ceScore;
+    const peConfidence = peScore;
 
     let signalType = 'NO TRADE';
     let confidence = 0;
@@ -369,26 +298,44 @@ export default function App() {
       return {
         type: 'NO TRADE',
         confidence: 0,
-        reasons: [`Risk Block: India VIX (${vix.toFixed(1)}%) exceeds safety limit ${thresholds.vixMax}%`],
-        atmStrike
+        reasons: [`Risk Override: India VIX (${vix.toFixed(1)}%) exceeds safety limit ${thresholds.vixMax}%`],
+        atmStrike,
+        ceConfidence: 0,
+        peConfidence: 0,
+        ceList,
+        peList,
+        bias: 0
       };
     }
 
     if (ceConfidence >= 60 && ceConfidence >= peConfidence) {
       signalType = 'BUY CE';
       confidence = ceConfidence;
-      reasonsList = ceReasons;
+      
+      // Build reason list from met items
+      ceList.forEach(item => {
+        if (item.score > 0) reasonsList.push(`${item.name} is Confirmed (+${item.score})`);
+      });
     } else if (peConfidence >= 60 && peConfidence > ceConfidence) {
       signalType = 'BUY PE';
       confidence = peConfidence;
-      reasonsList = peReasons;
+      
+      // Build reason list from met items
+      peList.forEach(item => {
+        if (item.score > 0) reasonsList.push(`${item.name} is Confirmed (+${item.score})`);
+      });
     }
 
     return {
       type: signalType,
       confidence,
-      reasons: reasonsList,
-      atmStrike
+      reasons: reasonsList.slice(0, 7), // top 7 reasons
+      atmStrike,
+      ceConfidence,
+      peConfidence,
+      ceList,
+      peList,
+      bias: ceConfidence - peConfidence
     };
   };
 
@@ -509,9 +456,116 @@ export default function App() {
         {/* Tab 1: Dashboard Console */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-              {/* Col 1: Market Watch & Custom Signals */}
-              <div className="space-y-6 lg:col-span-1">
+            
+            {/* Top Summary Cards Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              {/* CE Buy Probability */}
+              <div className="glass-panel p-4 rounded-xl border border-slate-800 flex flex-col justify-between font-mono">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">CE BUY PROBABILITY</span>
+                <div className="flex items-baseline justify-between mt-1">
+                  <span className="text-xl font-extrabold text-emerald-450">{customSignal.ceConfidence}%</span>
+                </div>
+                <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden mt-2 border border-slate-900/60">
+                  <div className="bg-emerald-500 h-full" style={{ width: `${customSignal.ceConfidence}%` }}></div>
+                </div>
+              </div>
+
+              {/* PE Buy Probability */}
+              <div className="glass-panel p-4 rounded-xl border border-slate-800 flex flex-col justify-between font-mono">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">PE BUY PROBABILITY</span>
+                <div className="flex items-baseline justify-between mt-1">
+                  <span className="text-xl font-extrabold text-rose-400">{customSignal.peConfidence}%</span>
+                </div>
+                <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden mt-2 border border-slate-900/60">
+                  <div className="bg-rose-500 h-full" style={{ width: `${customSignal.peConfidence}%` }}></div>
+                </div>
+              </div>
+
+              {/* Market Trend */}
+              <div className="glass-panel p-4 rounded-xl border border-slate-800 flex flex-col justify-between font-mono">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">MARKET TREND</span>
+                <div className="flex items-baseline justify-between mt-1">
+                  <span className={`text-lg font-black uppercase ${
+                    customSignal.bias > 15 ? 'text-emerald-400' :
+                    customSignal.bias < -15 ? 'text-rose-400' :
+                    'text-slate-400'
+                  }`}>
+                    {customSignal.bias > 15 ? 'Bullish' : customSignal.bias < -15 ? 'Bearish' : 'Neutral'}
+                  </span>
+                </div>
+                <span className="text-[9px] text-slate-500 mt-2 block">Crossover Confirmed</span>
+              </div>
+
+              {/* India VIX / Volatility */}
+              <div className="glass-panel p-4 rounded-xl border border-slate-800 flex flex-col justify-between font-mono">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">MARKET VOLATILITY</span>
+                <div className="flex items-baseline justify-between mt-1">
+                  <span className={`text-lg font-black uppercase ${
+                    marketData.indiaVix > 20 ? 'text-rose-455' :
+                    marketData.indiaVix > 15 ? 'text-amber-400' :
+                    'text-emerald-405'
+                  }`}>
+                    {marketData.indiaVix > 20 ? 'High Risk' : marketData.indiaVix > 15 ? 'Medium' : 'Low Vol'}
+                  </span>
+                </div>
+                <span className="text-[9px] text-slate-550 mt-2 block">VIX: {marketData.indiaVix.toFixed(2)}%</span>
+              </div>
+
+              {/* Directional Bias */}
+              <div className="glass-panel p-4 rounded-xl border border-slate-800 flex flex-col justify-between font-mono">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">DIRECTIONAL BIAS</span>
+                <div className="flex items-baseline justify-between mt-1">
+                  <span className={`text-lg font-black ${
+                    customSignal.bias > 0 ? 'text-emerald-400' :
+                    customSignal.bias < 0 ? 'text-rose-450' :
+                    'text-slate-400'
+                  }`}>
+                    {customSignal.bias > 0 ? '+' : ''}{customSignal.bias} ({
+                      Math.abs(customSignal.bias) > 30 ? 'Strong' : 'Moderate'
+                    })
+                  </span>
+                </div>
+                <span className="text-[9px] text-slate-500 mt-2 block">CE Score - PE Score</span>
+              </div>
+            </div>
+
+            {/* Core Three-Column F&O Workspace Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Column: Call scoring parameters */}
+              <div className="lg:col-span-3">
+                <CEDecisionCard list={customSignal.ceList} totalScore={customSignal.ceConfidence} />
+              </div>
+
+              {/* Center Column: Options Chain */}
+              <div className="lg:col-span-6">
+                <OptionChain 
+                  optionChain={marketData.optionChain} 
+                  niftySpot={marketData.niftySpot} 
+                  onSelectContract={handleSelectContract}
+                />
+              </div>
+
+              {/* Right Column: Put scoring parameters */}
+              <div className="lg:col-span-3">
+                <PEDecisionCard list={customSignal.peList} totalScore={customSignal.peConfidence} />
+              </div>
+            </div>
+
+            {/* AI Explanation & Live Indicators Widgets */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Col 1-8: AI Explanation */}
+              <div className="lg:col-span-9">
+                <SignalPanel 
+                  signal={customSignal} 
+                  riskLimitHit={paperState.risk.limitHit}
+                  onExecuteTrade={handleExecuteSignal}
+                  liveModeActive={liveModeActive}
+                  indiaVix={marketData.indiaVix}
+                />
+              </div>
+
+              {/* Col 9-12: Spot Candlestick summary */}
+              <div className="lg:col-span-3">
                 <MarketWatch 
                   niftySpot={marketData.niftySpot} 
                   indiaVix={marketData.indiaVix}
@@ -522,25 +576,10 @@ export default function App() {
                   indicators={marketData.indicators} 
                   candles={marketData.candles}
                 />
-                <SignalPanel 
-                  signal={customSignal} 
-                  riskLimitHit={paperState.risk.limitHit}
-                  onExecuteTrade={handleExecuteSignal}
-                  liveModeActive={liveModeActive}
-                />
-              </div>
-
-              {/* Col 2-4: Option Chain */}
-              <div className="lg:col-span-3">
-                <OptionChain 
-                  optionChain={marketData.optionChain} 
-                  niftySpot={marketData.niftySpot} 
-                  onSelectContract={handleSelectContract}
-                />
               </div>
             </div>
 
-            {/* Positions Table & Manual Entry */}
+            {/* Positions Table & Manual Entry Console */}
             <PaperTrade 
               paperState={paperState}
               optionChain={marketData.optionChain}
@@ -549,6 +588,64 @@ export default function App() {
               onRefresh={syncSystemState}
               liveModeActive={liveModeActive}
             />
+
+            {/* Trade History Executions Log */}
+            <div className="glass-panel p-5 rounded-2xl border border-slate-800 space-y-3.5 font-mono text-[11px]">
+              <span className="text-[10px] text-slate-500 uppercase font-bold block border-b border-slate-900 pb-2">
+                Execution Log (Trade History)
+              </span>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-slate-500 border-b border-slate-900 text-[9px] uppercase pb-1.5">
+                      <th className="py-1">Timestamp</th>
+                      <th className="py-1">Contract</th>
+                      <th className="py-1">Action</th>
+                      <th className="py-1 text-center">Qty</th>
+                      <th className="py-1 text-right">Entry Price</th>
+                      <th className="py-1 text-right">Exit Price</th>
+                      <th className="py-1 text-right">PnL Result</th>
+                      <th className="py-1 text-center">Trigger Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-950/20 text-slate-300">
+                    {paperState.history.slice(0, 5).map((log, idx) => (
+                      <tr key={idx} className="hover:bg-slate-900/10">
+                        <td className="py-2.5">{new Date(log.timestamp).toLocaleTimeString()}</td>
+                        <td className="py-2.5 text-slate-200 font-bold">{log.symbol}</td>
+                        <td className="py-2.5">
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                            log.type === 'BUY' ? 'bg-emerald-950/40 text-emerald-400' : 'bg-rose-950/40 text-rose-455'
+                          }`}>
+                            {log.type}
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-center">{log.quantity}</td>
+                        <td className="py-2.5 text-right">₹{log.entryPrice.toFixed(2)}</td>
+                        <td className="py-2.5 text-right">{log.exitPrice ? `₹${log.exitPrice.toFixed(2)}` : '-'}</td>
+                        <td className={`py-2.5 text-right font-bold ${log.pnl >= 0 ? 'text-emerald-400' : 'text-rose-455'}`}>
+                          {log.pnl !== undefined ? `₹${log.pnl >= 0 ? '+' : ''}${log.pnl.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '₹0.00'}
+                        </td>
+                        <td className="py-2.5 text-center">
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                            log.reason.includes('HIT') || log.pnl > 0 ? 'bg-emerald-950/40 text-emerald-400' : 'bg-slate-900 text-slate-400'
+                          }`}>
+                            {log.reason || 'CLOSED'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {paperState.history.length === 0 && (
+                      <tr>
+                        <td colSpan="8" className="py-4 text-center text-slate-500 italic">
+                          No recent executions logged. Terminal is ready to scan breakout signals.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
