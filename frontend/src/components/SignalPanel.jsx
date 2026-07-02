@@ -2,9 +2,14 @@ import React from 'react';
 import { ArrowUpCircle, ArrowDownCircle, AlertCircle, PlayCircle, Lock } from 'lucide-react';
 
 export default function SignalPanel({ signal, riskLimitHit, onExecuteTrade, liveModeActive }) {
-  const { type, confidence, reason, atmStrike } = signal || { type: 'NO TRADE', confidence: 0, reason: 'Establishing feed connection...', atmStrike: null };
-
-  const parsedReasons = reason ? reason.split('|').map(r => r.trim()) : [];
+  const { type, confidence, reasons = [], atmStrike, ceConfidence = 0, peConfidence = 0 } = signal || { 
+    type: 'NO TRADE', 
+    confidence: 0, 
+    reasons: ['Establishing feed connection...'], 
+    atmStrike: null,
+    ceConfidence: 0,
+    peConfidence: 0
+  };
 
   // Visual formatting parameters based on trade recommendations
   let cardStyles = "border-slate-800 bg-slate-900/20";
@@ -31,8 +36,6 @@ export default function SignalPanel({ signal, riskLimitHit, onExecuteTrade, live
 
   const handleExecute = () => {
     if (riskLimitHit) return;
-    
-    // Choose appropriate contract symbol based on signal and ATM strike
     if (!atmStrike) return;
     
     const optionType = type === 'BUY CE' ? 'CE' : 'PE';
@@ -51,8 +54,8 @@ export default function SignalPanel({ signal, riskLimitHit, onExecuteTrade, live
       className={`glass-panel p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between h-full ${cardStyles}`}
       style={{ boxShadow: `0 8px 32px 0 ${glowColor}` }}
     >
-      {/* Title & Badge Header */}
       <div>
+        {/* Title & Badge Header */}
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
           <span className="text-xs font-mono text-slate-400 tracking-wider">SIGNAL ENGINE</span>
           <span className={`text-[10px] font-mono border px-2 py-0.5 rounded-full ${badgeStyles}`}>
@@ -61,10 +64,10 @@ export default function SignalPanel({ signal, riskLimitHit, onExecuteTrade, live
         </div>
 
         {/* Central Display: Signal Indicator & Confidence */}
-        <div className="flex items-center space-x-6">
+        <div className="flex items-center space-x-5">
           {/* Circular Indicator */}
-          <div className="relative flex items-center justify-center h-20 w-20 flex-shrink-0 bg-slate-950/50 rounded-full border border-slate-800">
-            <Icon className={`h-10 w-10 ${
+          <div className="relative flex items-center justify-center h-16 w-16 flex-shrink-0 bg-slate-950/50 rounded-full border border-slate-800">
+            <Icon className={`h-8 w-8 ${
               type === 'BUY CE' ? 'text-emerald-400' : type === 'BUY PE' ? 'text-rose-400' : 'text-slate-500'
             }`} />
             
@@ -72,46 +75,83 @@ export default function SignalPanel({ signal, riskLimitHit, onExecuteTrade, live
             {confidence > 0 && (
               <svg className="absolute top-0 left-0 w-full h-full transform -rotate-90">
                 <circle
-                  cx="40"
-                  cy="40"
-                  r="37.5"
+                  cx="32"
+                  cy="32"
+                  r="29.5"
                   stroke={type === 'BUY CE' ? '#10b981' : '#ef4444'}
-                  strokeWidth="2.5"
+                  strokeWidth="2"
                   fill="transparent"
-                  strokeDasharray="235.6"
-                  strokeDashoffset={235.6 - (235.6 * confidence) / 100}
+                  strokeDasharray="185.3"
+                  strokeDashoffset={185.3 - (185.3 * confidence) / 100}
                 />
               </svg>
             )}
           </div>
 
           <div>
-            <span className="text-[10px] font-mono text-slate-500 uppercase">Recommendation</span>
-            <h4 className={`text-2xl font-black bg-gradient-to-r bg-clip-text text-transparent ${textGrad}`}>
+            <span className="text-[9px] font-mono text-slate-500 uppercase">Recommendation</span>
+            <h4 className={`text-lg font-black bg-gradient-to-r bg-clip-text text-transparent ${textGrad}`}>
               {type === 'NO TRADE' ? 'NO ACTIVE TRADE' : `${type} @ ${atmStrike || ''}`}
             </h4>
             
             {confidence > 0 ? (
-              <div className="flex items-center space-x-2 mt-1">
-                <span className="text-xs font-mono text-slate-400">Confidence:</span>
-                <span className={`text-xs font-bold font-mono ${
-                  confidence >= 75 ? 'text-emerald-400' : 'text-amber-400'
+              <div className="flex items-center space-x-1.5 mt-0.5">
+                <span className="text-[10px] font-mono text-slate-450">Confidence:</span>
+                <span className={`text-[10px] font-bold font-mono ${
+                  confidence >= 75 ? 'text-emerald-400' : 'text-amber-405'
                 }`}>
                   {confidence}%
                 </span>
               </div>
             ) : (
-              <p className="text-xs text-slate-500 font-mono mt-0.5">Scanning indicators...</p>
+              <p className="text-[10px] text-slate-500 font-mono mt-0.5">Scanning market structure...</p>
             )}
           </div>
         </div>
 
+        {/* Probability comparative gauges */}
+        <div className="mt-5 space-y-3 bg-slate-950/40 p-3.5 rounded-xl border border-slate-900/60">
+          <div className="space-y-1">
+            <div className="flex justify-between text-[9px] font-mono text-slate-400">
+              <span>BUY CE PROBABILITY</span>
+              <span className="text-emerald-400 font-bold">{ceConfidence}%</span>
+            </div>
+            <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-800/40">
+              <div 
+                className="bg-emerald-500 h-full transition-all duration-500" 
+                style={{ width: `${ceConfidence}%` }}
+              ></div>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex justify-between text-[9px] font-mono text-slate-400">
+              <span>BUY PE PROBABILITY</span>
+              <span className="text-rose-400 font-bold">{peConfidence}%</span>
+            </div>
+            <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-800/40">
+              <div 
+                className="bg-rose-500 h-full transition-all duration-500" 
+                style={{ width: `${peConfidence}%` }}
+              ></div>
+            </div>
+          </div>
+
+          {hasTradeSignal && (
+            <div className="text-[9px] font-mono text-center text-slate-350 border-t border-slate-900/50 pt-2 mt-1.5">
+              DIFFERENCE: <span className="font-extrabold text-emerald-400">
+                {Math.abs(ceConfidence - peConfidence)}% {type === 'BUY CE' ? 'CALL' : 'PUT'} BREADTH BIAS
+              </span>
+            </div>
+          )}
+        </div>
+
         {/* Checklist of met criteria */}
-        <div className="mt-5 space-y-2">
-          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Conditions checklist</span>
-          <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
-            {parsedReasons.map((r, i) => (
-              <div key={i} className="flex items-start space-x-2 text-xs">
+        <div className="mt-4 space-y-1.5">
+          <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">Conditions met</span>
+          <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+            {reasons.map((r, i) => (
+              <div key={i} className="flex items-start space-x-1.5 text-[10px]">
                 <span className={`mt-1 h-1.5 w-1.5 rounded-full flex-shrink-0 ${
                   type === 'BUY CE' ? 'bg-emerald-500' : type === 'BUY PE' ? 'bg-rose-500' : 'bg-slate-500'
                 }`}></span>
@@ -123,30 +163,30 @@ export default function SignalPanel({ signal, riskLimitHit, onExecuteTrade, live
       </div>
 
       {/* Action triggers */}
-      <div className="mt-5 pt-4 border-t border-slate-800/80">
+      <div className="mt-4 pt-3 border-t border-slate-800/60">
         {riskLimitHit ? (
-          <div className="flex items-center bg-rose-950/20 border border-rose-900/40 p-3 rounded-xl space-x-2">
+          <div className="flex items-center bg-rose-950/20 border border-rose-900/40 p-2.5 rounded-xl space-x-2">
             <Lock className="h-4 w-4 text-rose-400 flex-shrink-0" />
-            <span className="text-[10px] font-mono text-rose-400">
-              TRADING HALTED: Daily loss/trade limit breached.
+            <span className="text-[9px] font-mono text-rose-450">
+              TRADING HALTED: Daily limits hit.
             </span>
           </div>
         ) : hasTradeSignal ? (
           <button
             onClick={handleExecute}
-            className={`w-full flex items-center justify-center py-2.5 rounded-xl font-semibold text-sm transition ${
+            className={`w-full flex items-center justify-center py-2 rounded-xl font-semibold text-xs transition ${
               type === 'BUY CE'
                 ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-950/20'
                 : 'bg-rose-500 hover:bg-rose-400 text-slate-950 shadow-md shadow-rose-950/20'
             }`}
           >
-            <PlayCircle className="h-4.5 w-4.5 mr-2" />
+            <PlayCircle className="h-4 w-4 mr-1.5" />
             {liveModeActive ? 'Place Live Order' : 'Execute Paper Trade'}
           </button>
         ) : (
           <button
             disabled
-            className="w-full py-2.5 bg-slate-800 text-slate-500 rounded-xl font-semibold text-sm cursor-not-allowed text-center"
+            className="w-full py-2 bg-slate-800 text-slate-500 rounded-xl font-semibold text-xs cursor-not-allowed text-center"
           >
             Waiting for Signal...
           </button>

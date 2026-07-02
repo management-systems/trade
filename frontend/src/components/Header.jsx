@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Key, AlertTriangle, Cloud, CloudOff, LogOut, CheckCircle } from 'lucide-react';
+import { Shield, Key, AlertTriangle, Cloud, CloudOff, LogOut, CheckCircle, Sun, Moon } from 'lucide-react';
 import { api } from '../services/api';
 
 export default function Header({ 
@@ -14,6 +14,19 @@ export default function Header({
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showSafetyModal, setShowSafetyModal] = useState(false);
   const [safetyText, setSafetyText] = useState('');
+  
+  // Theme switcher state
+  const [isLightMode, setIsLightMode] = useState(document.body.classList.contains('light-mode'));
+
+  const toggleTheme = () => {
+    if (document.body.classList.contains('light-mode')) {
+      document.body.classList.remove('light-mode');
+      setIsLightMode(false);
+    } else {
+      document.body.classList.add('light-mode');
+      setIsLightMode(true);
+    }
+  };
   
   // Credentials form state
   const [credentials, setCredentials] = useState({
@@ -111,6 +124,19 @@ export default function Header({
             <span className={`h-2.5 w-2.5 rounded-full mr-2 ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
             <span className="text-slate-300">{isConnected ? 'FEED CONNECTED' : 'FEED OFFLINE'}</span>
           </div>
+
+          {/* Theme Mode Switcher */}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center justify-center p-2 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white transition duration-200"
+            title="Toggle Light/Dark Theme"
+          >
+            {isLightMode ? (
+              <Moon className="h-4 w-4 text-amber-500" />
+            ) : (
+              <Sun className="h-4 w-4 text-emerald-400" />
+            )}
+          </button>
 
           {/* Active Balance Display based on Mode */}
           {!liveModeActive ? (

@@ -76,3 +76,56 @@ body {
 .animate-soft-pulse {
   animation: soft-pulse 2s infinite ease-in-out;
 }
+
+/* Light mode overrides */
+body.light-mode {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+body.light-mode ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+body.light-mode ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+body.light-mode ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+body.light-mode .glass-panel {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+body.light-mode .glass-panel-hover:hover {
+  background: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+}
+
+/* Overrides for text color in light mode */
+body.light-mode .text-slate-100 { color: #0f172a !important; }
+body.light-mode .text-slate-200 { color: #1e293b !important; }
+body.light-mode .text-slate-300 { color: #334155 !important; }
+body.light-mode .text-slate-350 { color: #475569 !important; }
+body.light-mode .text-slate-450 { color: #475569 !important; }
+body.light-mode .text-slate-400 { color: #475569 !important; }
+body.light-mode .text-slate-500 { color: #64748b !important; }
+body.light-mode .text-white { color: #0f172a !important; }
+
+/* Overrides for background color in light mode */
+body.light-mode .bg-slate-950 { background-color: #f1f5f9 !important; }
+body.light-mode .bg-slate-950\/40 { background-color: #e2e8f0 !important; }
+body.light-mode .bg-slate-950\/50 { background-color: #e2e8f0 !important; }
+body.light-mode .bg-slate-950\/60 { background-color: #e2e8f0 !important; }
+body.light-mode .bg-slate-900 { background-color: #cbd5e1 !important; }
+body.light-mode .bg-slate-900\/50 { background-color: #cbd5e1 !important; }
+body.light-mode .bg-slate-900\/60 { background-color: #cbd5e1 !important; }
+body.light-mode .bg-slate-900\/10 { background-color: rgba(0, 0, 0, 0.03) !important; }
+body.light-mode .bg-\[\#070b13\] { background-color: #f8fafc !important; }
+body.light-mode .bg-\[\#0c1220\]\/60 { background-color: rgba(255, 255, 255, 0.95) !important; }
+
+/* Overrides for border color in light mode */
+body.light-mode .border-slate-800 { border-color: #cbd5e1 !important; }
+body.light-mode .border-slate-900 { border-color: #e2e8f0 !important; }
+body.light-mode .border-slate-800\/80 { border-color: #e2e8f0 !important; }
+body.light-mode .border-slate-800\/60 { border-color: #cbd5e1 !important; }
