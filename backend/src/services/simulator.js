@@ -10,6 +10,8 @@ class MarketSimulator extends EventEmitter {
     this.intervalId = null;
     this.tickCount = 0;
     this.oiData = {}; // Store persistent OI values to simulate gradual changes
+    this.indiaVix = 14.5;
+    this.futuresOi = 1250000;
     
     this.initializeHistory();
   }
@@ -65,6 +67,12 @@ class MarketSimulator extends EventEmitter {
 
         const bankNiftyChange = (Math.random() - 0.49) * 10;
         this.bankNiftySpot = parseFloat((this.bankNiftySpot + bankNiftyChange).toFixed(2));
+
+        const vixChange = (Math.random() - 0.5) * 0.12;
+        this.indiaVix = parseFloat(Math.max(8, Math.min(30, this.indiaVix + vixChange)).toFixed(2));
+
+        const futChange = Math.floor((Math.random() - 0.48) * 1100);
+        this.futuresOi = Math.max(500000, this.futuresOi + futChange);
       }
 
       // 2. Aggregate ticks for the current minute candle
@@ -120,6 +128,8 @@ class MarketSimulator extends EventEmitter {
         timestamp,
         niftySpot: this.niftySpot,
         bankNiftySpot: this.bankNiftySpot,
+        indiaVix: this.indiaVix,
+        futuresOi: this.futuresOi,
         optionChain,
         candles: this.candles
       });

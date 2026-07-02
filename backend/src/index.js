@@ -78,6 +78,8 @@ angelOneService.on('spotTick', ({ index, price }) => {
     marketSimulator.niftySpot = price;
   } else if (index === 'BANKNIFTY') {
     marketSimulator.bankNiftySpot = price;
+  } else if (index === 'VIX') {
+    marketSimulator.indiaVix = price;
   }
 });
 
@@ -168,6 +170,8 @@ marketSimulator.on('tick', async (marketData) => {
     timestamp: marketData.timestamp,
     niftySpot: marketData.niftySpot,
     bankNiftySpot: marketData.bankNiftySpot,
+    indiaVix: marketData.indiaVix,
+    futuresOi: marketData.futuresOi,
     optionChain: marketData.optionChain,
     signal: {
       type: signalResult.signalType,

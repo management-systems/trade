@@ -17,13 +17,24 @@ export default function App() {
   const [liveModeActive, setLiveModeActive] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Custom signal criteria settings
+  // Custom signal criteria active settings
   const [criteriaSettings, setCriteriaSettings] = useState({
     vwap: true,
     ema: true,
     breakout: true,
     volume: true,
-    oi: true
+    oi: true,
+    rsi: true,
+    macd: true,
+    vix: true
+  });
+
+  // Dynamic Rule Threshold settings
+  const [thresholds, setThresholds] = useState({
+    rsiBullish: 55,
+    rsiBearish: 45,
+    vixMax: 22,
+    volumeMult: 1.3
   });
 
   // Angel One Login state
@@ -38,6 +49,8 @@ export default function App() {
   const [marketData, setMarketData] = useState({
     niftySpot: 24150,
     bankNiftySpot: 52200,
+    indiaVix: 14.5,
+    futuresOi: 1250000,
     optionChain: [],
     signal: { type: 'NO TRADE', confidence: 0, reason: 'Connecting feed...', atmStrike: null },
     indicators: {},
@@ -96,6 +109,8 @@ export default function App() {
         setMarketData({
           niftySpot: data.niftySpot,
           bankNiftySpot: data.bankNiftySpot,
+          indiaVix: data.indiaVix || 14.5,
+          futuresOi: data.futuresOi || 1250000,
           optionChain: data.optionChain,
           signal: data.signal,
           indicators: data.indicators,
@@ -144,9 +159,17 @@ export default function App() {
     }));
   };
 
-  // Dynamically calculate signals locally based on toggled CE/PE rules
+  // Handle threshold modifications
+  const handleThresholdChange = (key, val) => {
+    setThresholds(prev => ({
+      ...prev,
+      [key]: val
+    }));
+  };
+
+  // Dynamically calculate signals locally based on toggled CE/PE rules & custom thresholds
   const getCustomSignal = () => {
-    const defaultSignal = marketData.signal || { signalType: 'NO TRADE', confidence: 0, reason: '', indicators: {} };
+    const defaultSignal = marketData.signal || { signalType: 'NO TRADE', confidence: 0, reason: 'Waiting for data...', atmStrike: null };
     if (!marketData.niftySpot || !marketData.candles || marketData.candles.length === 0) {
       return defaultSignal;
     }
@@ -154,8 +177,13 @@ export default function App() {
     const spot = marketData.niftySpot;
     const indicators = marketData.indicators || {};
     const optionChain = marketData.optionChain || [];
-    const { ema20, ema50, vwap, support, resistance, isVolumeExpansion } = indicators;
+    const vix = marketData.indiaVix || 14.5;
     
+    const { ema20, ema50, vwap, support, resistance, isVolumeExpansion, rsi, macd: macdData } = indicators;
+    
+    // Check if VIX is above max safety limit
+    const isVixTooHigh = vix > thresholds.vixMax;
+
     const atmStrike = Math.round(spot / 50) * 50;
     let ceOiChangeAtmNear = 0;
     let peOiChangeAtmNear = 0;
@@ -176,6 +204,15 @@ export default function App() {
     let totalCeWeight = 0;
     const ceReasons = [];
 
+    // VIX safety filter
+    if (criteriaSettings.vix) {
+      totalCeWeight += 10;
+      if (!isVixTooHigh) {
+        buyCeScore += 10;
+        ceReasons.push(`VIX is safe at ${vix.toFixed(1)}% (<${thresholds.vixMax}%)`);
+      }
+    }
+
     if (criteriaSettings.vwap) {
       totalCeWeight += 25;
       if (spot > vwap) {
@@ -187,7 +224,7 @@ export default function App() {
       totalCeWeight += 25;
       if (ema20 && ema50 && ema20 > ema50) {
         buyCeScore += 25;
-        ceReasons.push("EMA 20 is above EMA 50 (Bullish Crossover)");
+        ceReasons.push("EMA 20 is above EMA 50 (Golden Cross)");
       }
     }
     if (criteriaSettings.breakout) {
@@ -201,7 +238,21 @@ export default function App() {
       totalCeWeight += 15;
       if (isVolumeExpansion) {
         buyCeScore += 15;
-        ceReasons.push("Volume is expanding (>1.3x average)");
+        ceReasons.push(`Volume is expanding (>1.3x average)`);
+      }
+    }
+    if (criteriaSettings.rsi) {
+      totalCeWeight += 15;
+      if (rsi && rsi > thresholds.rsiBullish) {
+        buyCeScore += 15;
+        ceReasons.push(`RSI is above bullish threshold ${thresholds.rsiBullish} (RSI: ${rsi.toFixed(1)})`);
+      }
+    }
+    if (criteriaSettings.macd) {
+      totalCeWeight += 15;
+      if (macdData && macdData.macd > macdData.signal) {
+        buyCeScore += 15;
+        ceReasons.push(`MACD Line is above Signal Line`);
       }
     }
     if (criteriaSettings.oi) {
@@ -222,6 +273,15 @@ export default function App() {
     let totalPeWeight = 0;
     const peReasons = [];
 
+    // VIX safety filter
+    if (criteriaSettings.vix) {
+      totalPeWeight += 10;
+      if (!isVixTooHigh) {
+        buyPeScore += 10;
+        peReasons.push(`VIX is safe at ${vix.toFixed(1)}% (<${thresholds.vixMax}%)`);
+      }
+    }
+
     if (criteriaSettings.vwap) {
       totalPeWeight += 25;
       if (spot < vwap) {
@@ -233,7 +293,7 @@ export default function App() {
       totalPeWeight += 25;
       if (ema20 && ema50 && ema20 < ema50) {
         buyPeScore += 25;
-        peReasons.push("EMA 20 is below EMA 50 (Bearish Crossover)");
+        peReasons.push("EMA 20 is below EMA 50 (Death Cross)");
       }
     }
     if (criteriaSettings.breakout) {
@@ -247,7 +307,21 @@ export default function App() {
       totalPeWeight += 15;
       if (isVolumeExpansion) {
         buyPeScore += 15;
-        peReasons.push("Volume is expanding on down move (>1.3x average)");
+        peReasons.push("Volume is expanding on down move");
+      }
+    }
+    if (criteriaSettings.rsi) {
+      totalPeWeight += 15;
+      if (rsi && rsi < thresholds.rsiBearish) {
+        buyPeScore += 15;
+        peReasons.push(`RSI is below bearish threshold ${thresholds.rsiBearish} (RSI: ${rsi.toFixed(1)})`);
+      }
+    }
+    if (criteriaSettings.macd) {
+      totalPeWeight += 15;
+      if (macdData && macdData.macd < macdData.signal) {
+        buyPeScore += 15;
+        peReasons.push("MACD Line is below Signal Line");
       }
     }
     if (criteriaSettings.oi) {
@@ -270,6 +344,16 @@ export default function App() {
     let signalType = 'NO TRADE';
     let confidence = 0;
     let reasonsList = [];
+
+    // Safety Override: Block all entries if VIX is dangerously high
+    if (criteriaSettings.vix && isVixTooHigh) {
+      return {
+        type: 'NO TRADE',
+        confidence: 0,
+        reasons: [`Risk Block: India VIX (${vix.toFixed(1)}%) exceeds safety limit ${thresholds.vixMax}%`],
+        atmStrike
+      };
+    }
 
     if (ceConfidence >= 60 && ceConfidence >= peConfidence) {
       signalType = 'BUY CE';
@@ -332,7 +416,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#070b13] flex flex-col text-slate-100">
+    <div className="min-h-screen bg-[#070b13] flex flex-col text-slate-100 font-sans">
       {/* Navbar Header */}
       <Header 
         isConnected={isConnected} 
@@ -412,6 +496,8 @@ export default function App() {
                 <MarketWatch 
                   niftySpot={marketData.niftySpot} 
                   bankNiftySpot={marketData.bankNiftySpot} 
+                  indiaVix={marketData.indiaVix}
+                  futuresOi={marketData.futuresOi}
                   indicators={marketData.indicators} 
                 />
                 <SignalPanel 
@@ -495,9 +581,15 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 3: CE/PE Criteria Switches */}
+        {/* Tab 3: CE/PE Criteria Table Matrix */}
         {activeTab === 'criteria' && (
-          <CriteriaPanel settings={criteriaSettings} onToggle={handleToggleCriteria} />
+          <CriteriaPanel 
+            settings={criteriaSettings} 
+            onToggle={handleToggleCriteria} 
+            thresholds={thresholds}
+            onThresholdChange={handleThresholdChange}
+            marketData={marketData}
+          />
         )}
 
         {/* Tab 4: Risk Settings */}

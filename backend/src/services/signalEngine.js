@@ -23,6 +23,84 @@ export function calculateSupportResistance(candles, period) {
   };
 }
 
+// Calculate 14-period RSI using Wilder's smoothing method
+export function calculateRSI(candles, period = 14) {
+  if (!candles || candles.length < period + 1) return 50; // default neutral
+  
+  let gains = 0;
+  let losses = 0;
+  
+  for (let i = 1; i <= period; i++) {
+    const diff = candles[i].close - candles[i - 1].close;
+    if (diff > 0) gains += diff;
+    else losses -= diff;
+  }
+  
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  
+  for (let i = period + 1; i < candles.length; i++) {
+    const diff = candles[i].close - candles[i - 1].close;
+    if (diff > 0) {
+      avgGain = (avgGain * (period - 1) + diff) / period;
+      avgLoss = (avgLoss * (period - 1)) / period;
+    } else {
+      avgGain = (avgGain * (period - 1)) / period;
+      avgLoss = (avgLoss * (period - 1) - diff) / period;
+    }
+  }
+  
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return parseFloat((100 - 100 / (1 + rs)).toFixed(2));
+}
+
+// Calculate standard MACD (12, 26, 9)
+export function calculateMACD(candles) {
+  if (!candles || candles.length < 35) return { macd: 0, signal: 0, histogram: 0 };
+  
+  const closes = candles.map(c => c.close);
+  const ema12List = [];
+  const ema26List = [];
+  
+  let ema12 = closes.slice(0, 12).reduce((a, b) => a + b, 0) / 12;
+  let ema26 = closes.slice(0, 26).reduce((a, b) => a + b, 0) / 26;
+  
+  const k12 = 2 / 13;
+  const k26 = 2 / 27;
+  
+  for (let i = 0; i < closes.length; i++) {
+    if (i >= 12) ema12 = (closes[i] - ema12) * k12 + ema12;
+    if (i >= 26) ema26 = (closes[i] - ema26) * k26 + ema26;
+    
+    if (i >= 25) {
+      ema12List.push(ema12);
+      ema26List.push(ema26);
+    }
+  }
+  
+  const macdLine = [];
+  for (let i = 0; i < ema12List.length; i++) {
+    macdLine.push(ema12List[i] - ema26List[i]);
+  }
+  
+  const k9 = 2 / 10;
+  let signalLine = macdLine.slice(0, 9).reduce((a, b) => a + b, 0) / 9;
+  for (let i = 9; i < macdLine.length; i++) {
+    signalLine = (macdLine[i] - signalLine) * k9 + signalLine;
+  }
+  
+  const currentMacd = macdLine[macdLine.length - 1];
+  const currentSignal = signalLine;
+  const histogram = currentMacd - currentSignal;
+  
+  return {
+    macd: parseFloat(currentMacd.toFixed(3)),
+    signal: parseFloat(currentSignal.toFixed(3)),
+    histogram: parseFloat(histogram.toFixed(3))
+  };
+}
+
 export function analyzeSignal(marketData) {
   const { niftySpot, optionChain, candles } = marketData;
   
@@ -87,6 +165,8 @@ export function analyzeSignal(marketData) {
   const isCallOiIncreasing = ceOiChangeAtmNear > 100;
 
   const currentVwap = latestCandle.vwap;
+  const rsi = calculateRSI(candles, 14);
+  const macdData = calculateMACD(candles);
 
   // Indicators object to pass to UI
   const indicatorStats = {
@@ -97,7 +177,9 @@ export function analyzeSignal(marketData) {
     resistance,
     avgVolume: Math.round(avgVolume),
     latestVolume,
-    isVolumeExpansion
+    isVolumeExpansion,
+    rsi,
+    macd: macdData
   };
 
   // 3. Evaluate Signal Conditions

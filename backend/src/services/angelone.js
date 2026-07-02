@@ -79,13 +79,13 @@ class AngelOneService extends EventEmitter {
       await this.ws.connect();
       console.log("AngelOne WS: WebSocket V2 Connected.");
 
-      // Subscribe to Nifty 50 spot (99926000) and Bank Nifty spot (99926009)
+      // Subscribe to Nifty 50 spot (99926000), Bank Nifty spot (99926009), and India VIX (99926017)
       const subscriptionRequest = {
         correlationID: "trading_dashboard_spot",
         action: 1, // 1 for Subscribe
         mode: 1,   // 1 for LTP feed
         exchangeType: 1, // 1 for NSE
-        tokens: ["99926000", "99926009"]
+        tokens: ["99926000", "99926009", "99926017"]
       };
 
       this.ws.fetchData(subscriptionRequest);
@@ -104,6 +104,9 @@ class AngelOneService extends EventEmitter {
         } else if (data.token === "99926009") {
           this.lastLtp.banknifty = price;
           this.emit('spotTick', { index: 'BANKNIFTY', price, timestamp: Date.now() });
+        } else if (data.token === "99926017") {
+          this.lastLtp.vix = price;
+          this.emit('spotTick', { index: 'VIX', price, timestamp: Date.now() });
         }
       });
 
