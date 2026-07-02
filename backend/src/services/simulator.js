@@ -53,15 +53,19 @@ class MarketSimulator extends EventEmitter {
   start() {
     if (this.intervalId) return;
 
+    this.isLiveMode = false; // Flag updated by index.js on Angel One connection
+
     this.intervalId = setInterval(() => {
       this.tickCount++;
       
-      // 1. Simulate Nifty and Bank Nifty spot fluctuations
-      const niftyChange = (Math.random() - 0.49) * 4; // micro-moves
-      this.niftySpot = parseFloat((this.niftySpot + niftyChange).toFixed(2));
+      // 1. Simulate Nifty and Bank Nifty spot fluctuations ONLY when not in live mode
+      if (!this.isLiveMode) {
+        const niftyChange = (Math.random() - 0.49) * 4; // micro-moves
+        this.niftySpot = parseFloat((this.niftySpot + niftyChange).toFixed(2));
 
-      const bankNiftyChange = (Math.random() - 0.49) * 10;
-      this.bankNiftySpot = parseFloat((this.bankNiftySpot + bankNiftyChange).toFixed(2));
+        const bankNiftyChange = (Math.random() - 0.49) * 10;
+        this.bankNiftySpot = parseFloat((this.bankNiftySpot + bankNiftyChange).toFixed(2));
+      }
 
       // 2. Aggregate ticks for the current minute candle
       const timestamp = Date.now();

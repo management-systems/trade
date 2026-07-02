@@ -83,6 +83,9 @@ angelOneService.on('spotTick', ({ index, price }) => {
 
 // Main Tick Loop: simulator emits updates every second
 marketSimulator.on('tick', async (marketData) => {
+  // Sync the live mode state to block simulated movements when connected
+  marketSimulator.isLiveMode = angelOneService.isConnected;
+
   // 1. If Angel One is authenticated, fetch real, accurate options data
   if (angelOneService.isConnected) {
     try {
