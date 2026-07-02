@@ -186,6 +186,24 @@ class AngelOneService extends EventEmitter {
     return null;
   }
 
+  async getIndexQuotes(tokens) {
+    if (!this.isConnected || !this.smartapi) return null;
+    try {
+      const response = await this.smartapi.marketData({
+        mode: "FULL",
+        exchangeTokens: {
+          "NSE": tokens
+        }
+      });
+      if (response && response.status && response.data) {
+        return response.data.fetched || [];
+      }
+    } catch (e) {
+      console.error("AngelOne: Fetching index quotes failed:", e.message || e);
+    }
+    return null;
+  }
+
   // Fetches live user funds & cash margin limits
   async getFunds() {
     if (!this.isConnected || !this.smartapi) return null;

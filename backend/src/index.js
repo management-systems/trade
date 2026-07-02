@@ -83,18 +83,74 @@ angelOneService.on('spotTick', ({ index, price }) => {
   }
 });
 
+function isMarketOpen() {
+  const now = new Date();
+  const istTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const day = istTime.getDay(); // 0 = Sunday, 6 = Saturday
+  if (day === 0 || day === 6) return false;
+  
+  const currentMinutes = istTime.getHours() * 60 + istTime.getMinutes();
+  // 9:15 AM to 3:30 PM (555 to 930)
+  return currentMinutes >= 555 && currentMinutes <= 930;
+}
+
 // Storing previous OI values to calculate live OI Change (%) dynamically
 const prevOiMap = new Map();
 
 // Main Tick Loop: simulator emits updates every second
 marketSimulator.on('tick', async (marketData) => {
-  // Sync the live mode state to block simulated movements when connected
   marketSimulator.isLiveMode = angelOneService.isConnected;
 
+  const connected = angelOneService.isConnected;
+  const open = isMarketOpen();
+
+  if (!connected) {
+    broadcast({
+      type: 'MARKET_STATUS',
+      data: {
+        status: 'OFFLINE',
+        message: 'No active session with Angel One SmartAPI.'
+      }
+    });
+    return;
+  }
+
+  // If spot price is empty (on startup or off-market hours), query Spot + VIX once via REST
+  if (marketData.niftySpot <= 0) {
+    try {
+      const indexQuotes = await angelOneService.getIndexQuotes(["99926000", "99926017"]);
+      if (indexQuotes && indexQuotes.length > 0) {
+        indexQuotes.forEach(q => {
+          if (q.symbolToken === "99926000") {
+            marketSimulator.niftySpot = parseFloat(q.ltp || 0);
+          } else if (q.symbolToken === "99926017") {
+            marketSimulator.indiaVix = parseFloat(q.ltp || 0);
+          }
+        });
+      }
+    } catch (e) {
+      console.error("Index: Failed to fetch REST index quotes on tick:", e);
+    }
+  }
+
+  if (!open && marketData.optionChain && marketData.optionChain.length > 0) {
+    // If option chain is already populated, broadcast CLOSED status and freeze REST requests
+    broadcast({
+      type: 'MARKET_STATUS',
+      data: {
+        status: 'CLOSED',
+        message: 'Exchange is Closed. Showing static closing prices.'
+      }
+    });
+    return;
+  }
+
   // 1. If Angel One is authenticated, fetch real, accurate options data
-  if (angelOneService.isConnected) {
+  if (connected) {
     try {
       const spot = marketData.niftySpot;
+      if (spot <= 0) return; // Wait for Nifty spot to load
+      
       const atmStrike = Math.round(spot / 50) * 50;
       const strikes = [];
       for (let i = -5; i <= 5; i++) {

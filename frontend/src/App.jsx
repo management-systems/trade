@@ -176,6 +176,17 @@ export default function App() {
     }));
   };
 
+  const isMarketOpen = () => {
+    const now = new Date();
+    const istTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const day = istTime.getDay(); // 0 = Sunday, 6 = Saturday
+    if (day === 0 || day === 6) return false;
+    
+    const currentMinutes = istTime.getHours() * 60 + istTime.getMinutes();
+    // 9:15 AM to 3:30 PM (555 to 930)
+    return currentMinutes >= 555 && currentMinutes <= 930;
+  };
+
   // Dynamically calculate signals locally based on toggled CE/PE rules & custom thresholds
   const getCustomSignal = () => {
     const defaultSignal = { 
@@ -194,6 +205,44 @@ export default function App() {
     }
 
     const spot = marketData.niftySpot;
+    const atmStrike = Math.round(spot / 50) * 50;
+
+    const isLive = apiStatus.connected && isMarketOpen();
+
+    if (!isLive) {
+      return {
+        type: 'NO TRADE',
+        confidence: 0,
+        reasons: ['Exchange is Closed / Offline. Live evaluation only.'],
+        atmStrike,
+        ceConfidence: 0,
+        peConfidence: 0,
+        ceList: [
+          { name: 'Market Structure', status: 'FAIL', weight: 20, score: 0 },
+          { name: 'VWAP', status: 'FAIL', weight: 10, score: 0 },
+          { name: 'EMA20 > EMA50', status: 'FAIL', weight: 10, score: 0 },
+          { name: 'Support Break', status: 'FAIL', weight: 15, score: 0 },
+          { name: 'Volume', status: 'FAIL', weight: 10, score: 0 },
+          { name: 'Futures OI', status: 'FAIL', weight: 15, score: 0 },
+          { name: 'Option Chain', status: 'FAIL', weight: 10, score: 0 },
+          { name: 'RSI', status: 'FAIL', weight: 5, score: 0 },
+          { name: 'MACD', status: 'FAIL', weight: 5, score: 0 }
+        ],
+        peList: [
+          { name: 'Market Structure', status: 'FAIL', weight: 20, score: 0 },
+          { name: 'VWAP', status: 'FAIL', weight: 10, score: 0 },
+          { name: 'EMA20 < EMA50', status: 'FAIL', weight: 10, score: 0 },
+          { name: 'Breakdown', status: 'FAIL', weight: 15, score: 0 },
+          { name: 'Volume', status: 'FAIL', weight: 10, score: 0 },
+          { name: 'Short Build-up', status: 'FAIL', weight: 15, score: 0 },
+          { name: 'Option Chain', status: 'FAIL', weight: 10, score: 0 },
+          { name: 'RSI', status: 'FAIL', weight: 5, score: 0 },
+          { name: 'MACD', status: 'FAIL', weight: 5, score: 0 }
+        ],
+        bias: 0
+      };
+    }
+
     const indicators = marketData.indicators || {};
     const optionChain = marketData.optionChain || [];
     const vix = marketData.indiaVix || 14.5;
