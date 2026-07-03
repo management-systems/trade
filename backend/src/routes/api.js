@@ -5,6 +5,7 @@ import * as autoTradeState from '../services/autoTradeState.js';
 import autoTradeRoutes from './autoTradeRoutes.js';
 import marketSimulator from '../services/simulator.js';
 import { analyzeSignal } from '../services/signalEngine.js';
+import riskManager from '../services/riskManager.js';
 
 const router = express.Router();
 

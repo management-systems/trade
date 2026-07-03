@@ -140,6 +140,62 @@ let cachedOptionChain = [];
 marketSimulator.on('tick', async (marketData) => {
   marketSimulator.isLiveMode = angelOneService.isConnected;
   const connected = angelOneService.isConnected;
+  const open = isMarketOpen();
+
+  // If not connected, broadcast a minimal TICK with paper state so UI stays alive
+  if (!connected) {
+    const paperStateFallback = await paperTrader.getAccountState().catch(() => null);
+    broadcast({
+      type: 'TICK',
+      timestamp: new Date().toISOString(),
+      niftySpot: marketData.niftySpot || 0,
+      bankNiftySpot: marketData.bankNiftySpot || 0,
+      indiaVix: marketData.indiaVix || 14.5,
+      futuresOi: 0, futuresPrice: 0, futuresContractOi: 0, futuresOiChange: 0,
+      optionChain: cachedOptionChain,
+      signal: { type: 'NO TRADE', confidence: 0, reason: 'Broker feed offline', atmStrike: null },
+      indicators: {}, candles: [],
+      paper: paperStateFallback,
+      liveModeActive: false,
+      marketClosed: !open
+    });
+    return;
+  }
+
+  // When market is closed — fetch last known spot via REST, then broadcast frozen data
+  if (!open) {
+    try {
+      if (marketData.niftySpot <= 0) {
+        const idxQ = await angelOneService.getIndexQuotes(['99926000', '99926017']);
+        if (idxQ) idxQ.forEach(q => {
+          if (q.symbolToken === '99926000') marketSimulator.niftySpot = parseFloat(q.ltp || 0);
+          if (q.symbolToken === '99926017') marketSimulator.indiaVix = parseFloat(q.ltp || 0);
+        });
+      }
+    } catch (e) { /* ignore off-hours REST errors */ }
+
+    const paperStateClosed = await paperTrader.getAccountState().catch(() => null);
+    const signalClosed = analyzeSignal(marketData);
+    broadcast({
+      type: 'TICK',
+      timestamp: new Date().toISOString(),
+      niftySpot: marketData.niftySpot,
+      bankNiftySpot: marketData.bankNiftySpot,
+      indiaVix: marketData.indiaVix,
+      futuresOi: marketData.futuresOi || 0,
+      futuresPrice: marketData.futuresPrice || (marketData.niftySpot + 12),
+      futuresContractOi: marketData.futuresContractOi || 0,
+      futuresOiChange: 0,
+      optionChain: cachedOptionChain.length > 0 ? cachedOptionChain : (marketData.optionChain || []),
+      signal: { type: signalClosed.signalType, confidence: signalClosed.confidence, reason: 'Market Closed — Frozen closing prices', atmStrike: signalClosed.atmStrike },
+      indicators: signalClosed.indicators,
+      candles: marketData.candles || [],
+      paper: paperStateClosed,
+      liveModeActive: connected,
+      marketClosed: true
+    });
+    return;
+  }
 
   // 1. If Angel One is connected, fetch real option chain data
   if (connected) {
