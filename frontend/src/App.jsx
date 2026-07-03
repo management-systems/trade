@@ -243,40 +243,7 @@ export default function App() {
 
     const isLive = apiStatus.connected && isMarketOpen();
 
-    if (!isLive) {
-      return {
-        type: 'NO TRADE',
-        confidence: 0,
-        reasons: ['Exchange is Closed / Offline. Live evaluation only.'],
-        atmStrike,
-        ceConfidence: 0,
-        peConfidence: 0,
-        ceList: [
-          { name: 'Market Structure', status: 'FAIL', weight: 20, score: 0 },
-          { name: 'VWAP', status: 'FAIL', weight: 10, score: 0 },
-          { name: 'EMA20 > EMA50', status: 'FAIL', weight: 10, score: 0 },
-          { name: 'Support Break', status: 'FAIL', weight: 15, score: 0 },
-          { name: 'Volume', status: 'FAIL', weight: 10, score: 0 },
-          { name: 'Futures OI', status: 'FAIL', weight: 15, score: 0 },
-          { name: 'Option Chain', status: 'FAIL', weight: 10, score: 0 },
-          { name: 'RSI', status: 'FAIL', weight: 5, score: 0 },
-          { name: 'MACD', status: 'FAIL', weight: 5, score: 0 }
-        ],
-        peList: [
-          { name: 'Market Structure', status: 'FAIL', weight: 20, score: 0 },
-          { name: 'VWAP', status: 'FAIL', weight: 10, score: 0 },
-          { name: 'EMA20 < EMA50', status: 'FAIL', weight: 10, score: 0 },
-          { name: 'Breakdown', status: 'FAIL', weight: 15, score: 0 },
-          { name: 'Volume', status: 'FAIL', weight: 10, score: 0 },
-          { name: 'Short Build-up', status: 'FAIL', weight: 15, score: 0 },
-          { name: 'Option Chain', status: 'FAIL', weight: 10, score: 0 },
-          { name: 'RSI', status: 'FAIL', weight: 5, score: 0 },
-          { name: 'MACD', status: 'FAIL', weight: 5, score: 0 }
-        ],
-        bias: 0
-      };
-    }
-
+    // Always compute signals from simulator data; only block if no candles yet
     const indicators = marketData.indicators || {};
     const optionChain = marketData.optionChain || [];
     const vix = marketData.indiaVix || 14.5;
@@ -428,9 +395,9 @@ export default function App() {
     setSelectedPreFill(null);
     
     // PIN Verification for Signal Execution
-    const pin = prompt("Enter your 4-digit security PIN to authorize this automated signal trade:");
+    const pin = prompt("Enter your 6-digit security PIN to authorize this trade:");
     if (pin === null) return; 
-    if (pin.trim() !== '1232') {
+    if (pin.trim() !== '999266') {
       alert('Incorrect security PIN. Signal execution aborted.');
       return;
     }
@@ -479,7 +446,6 @@ export default function App() {
         liveModeActive={liveModeActive} 
         setLiveModeActive={setLiveModeActive}
         apiStatus={apiStatus} 
-        setApiStatus={setApiStatus} 
         balance={paperState.balance}
         onRefreshState={syncSystemState}
       />

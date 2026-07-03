@@ -137,165 +137,65 @@ let cachedOptionChain = [];
 // Main Tick Loop: simulator emits updates every second
 marketSimulator.on('tick', async (marketData) => {
   marketSimulator.isLiveMode = angelOneService.isConnected;
-
   const connected = angelOneService.isConnected;
-  const open = isMarketOpen();
 
-  if (!connected) {
-    broadcast({
-      type: 'MARKET_STATUS',
-      data: {
-        status: 'OFFLINE',
-        message: 'No active session with Angel One SmartAPI.'
-      }
-    });
-    return;
-  }
-
-  // If spot price is empty (on startup or off-market hours), query Spot + VIX once via REST
-  if (marketData.niftySpot <= 0) {
-    try {
-      const indexQuotes = await angelOneService.getIndexQuotes(["99926000", "99926017"]);
-      if (indexQuotes && indexQuotes.length > 0) {
-        indexQuotes.forEach(q => {
-          if (q.symbolToken === "99926000") {
-            marketSimulator.niftySpot = parseFloat(q.ltp || 0);
-          } else if (q.symbolToken === "99926017") {
-            marketSimulator.indiaVix = parseFloat(q.ltp || 0);
-          }
-        });
-      }
-    } catch (e) {
-      console.error("Index: Failed to fetch REST index quotes on tick:", e);
-    }
-  }
-
-  if (!open && marketData.optionChain && marketData.optionChain.length > 0) {
-    // If option chain is already populated, broadcast CLOSED status and freeze REST requests
-    broadcast({
-      type: 'MARKET_STATUS',
-      data: {
-        status: 'CLOSED',
-        message: 'Exchange is Closed. Showing static closing prices.'
-      }
-    });
-    return;
-  }
-
-  // 1. If Angel One is authenticated, fetch real, accurate options data
+  // 1. If Angel One is connected, fetch real option chain data
   if (connected) {
     try {
       const spot = marketData.niftySpot;
       if (spot > 0) {
         optionChainTickCounter++;
-        
-        // Fetch options chain quotes once every 3 seconds to avoid rate limiting
         if (optionChainTickCounter % 3 === 0 || cachedOptionChain.length === 0) {
           const atmStrike = Math.round(spot / 50) * 50;
           const strikes = [];
-          for (let i = -5; i <= 5; i++) {
-            strikes.push(atmStrike + i * 50);
-          }
+          for (let i = -5; i <= 5; i++) strikes.push(atmStrike + i * 50);
 
-          // Look up strike contracts in cached master list
           const contracts = scripMaster.getStrikeContracts('NIFTY', strikes);
           const tokens = [];
           contracts.forEach(c => {
             if (c.ce) tokens.push(c.ce.token);
             if (c.pe) tokens.push(c.pe.token);
           });
-
-          // Get Nifty Futures contract token
           const futScrip = scripMaster.getNiftyFutures();
-          if (futScrip) {
-            tokens.push(futScrip.token);
-          }
+          if (futScrip) tokens.push(futScrip.token);
 
           if (tokens.length > 0) {
-            // Fetch accurate quotes from SmartAPI
             const quotes = await angelOneService.getMarketQuotes(tokens);
-            console.log("OptionChain: getMarketQuotes response count:", quotes ? quotes.length : 'null/error', "tokens requested:", tokens.length);
             if (quotes && quotes.length > 0) {
               const quoteMap = {};
-              quotes.forEach(q => {
-                quoteMap[q.symbolToken] = q;
-              });
-
-              // Process Futures Contract details
-              let futLtp = marketData.niftySpot + 12; // default premium
-              let futOi = marketData.futuresOi;
-              let futOiChange = 0;
+              quotes.forEach(q => { quoteMap[q.symbolToken] = q; });
 
               if (futScrip && quoteMap[futScrip.token]) {
                 const fQuote = quoteMap[futScrip.token];
-                futLtp = parseFloat(fQuote.ltp || 0);
-                futOi = parseInt(fQuote.opnInterest || 0);
-
-                if (prevOiMap.has(futScrip.token)) {
-                  futOiChange = futOi - prevOiMap.get(futScrip.token);
-                }
+                const futOi = parseInt(fQuote.opnInterest || 0);
+                marketData.futuresPrice = parseFloat(fQuote.ltp || 0);
+                marketData.futuresContractOi = futOi;
+                marketData.futuresOiChange = prevOiMap.has(futScrip.token) ? futOi - prevOiMap.get(futScrip.token) : 0;
                 prevOiMap.set(futScrip.token, futOi);
               }
 
-              marketData.futuresPrice = futLtp;
-              marketData.futuresContractOi = futOi;
-              marketData.futuresOiChange = futOiChange;
-
-              // Enrich simulated option chain with true market numbers
               cachedOptionChain = contracts.map(c => {
                 const ceQuote = c.ce ? quoteMap[c.ce.token] : null;
                 const peQuote = c.pe ? quoteMap[c.pe.token] : null;
-
                 const ceOi = ceQuote ? parseInt(ceQuote.opnInterest || 0) : 0;
                 const peOi = peQuote ? parseInt(peQuote.opnInterest || 0) : 0;
-
-                let ceOiChange = 0;
-                let peOiChange = 0;
-
-                if (c.ce) {
-                  if (prevOiMap.has(c.ce.token)) {
-                    ceOiChange = ceOi - prevOiMap.get(c.ce.token);
-                  }
-                  prevOiMap.set(c.ce.token, ceOi);
-                }
-                if (c.pe) {
-                  if (prevOiMap.has(c.pe.token)) {
-                    peOiChange = peOi - prevOiMap.get(c.pe.token);
-                  }
-                  prevOiMap.set(c.pe.token, peOi);
-                }
-
+                const ceOiChange = c.ce && prevOiMap.has(c.ce.token) ? ceOi - prevOiMap.get(c.ce.token) : 0;
+                const peOiChange = c.pe && prevOiMap.has(c.pe.token) ? peOi - prevOiMap.get(c.pe.token) : 0;
+                if (c.ce) prevOiMap.set(c.ce.token, ceOi);
+                if (c.pe) prevOiMap.set(c.pe.token, peOi);
                 return {
                   strike: c.strike,
-                  ce: {
-                    symbol: c.ce ? c.ce.symbol : `NIFTY26JUL${c.strike}CE`,
-                    ltp: ceQuote ? parseFloat(ceQuote.ltp || 0) : (c.ce ? 10 : 0),
-                    oi: ceOi,
-                    oiChange: ceOiChange,
-                    oiChangePercent: ceOiChange && ceOi ? parseFloat(((ceOiChange / (ceOi - ceOiChange)) * 100).toFixed(2)) : 0,
-                    volume: ceQuote ? parseInt(ceQuote.tradeVolume || 0) : 0
-                  },
-                  pe: {
-                    symbol: c.pe ? c.pe.symbol : `NIFTY26JUL${c.strike}PE`,
-                    ltp: peQuote ? parseFloat(peQuote.ltp || 0) : (c.pe ? 10 : 0),
-                    oi: peOi,
-                    oiChange: peOiChange,
-                    oiChangePercent: peOiChange && peOi ? parseFloat(((peOiChange / (peOi - peOiChange)) * 100).toFixed(2)) : 0,
-                    volume: peQuote ? parseInt(peQuote.tradeVolume || 0) : 0
-                  }
+                  ce: { symbol: c.ce?.symbol || `NIFTY${c.strike}CE`, ltp: ceQuote ? parseFloat(ceQuote.ltp || 0) : 10, oi: ceOi, oiChange: ceOiChange, oiChangePercent: ceOi ? parseFloat(((ceOiChange / ceOi) * 100).toFixed(2)) : 0, volume: ceQuote ? parseInt(ceQuote.tradeVolume || 0) : 0 },
+                  pe: { symbol: c.pe?.symbol || `NIFTY${c.strike}PE`, ltp: peQuote ? parseFloat(peQuote.ltp || 0) : 10, oi: peOi, oiChange: peOiChange, oiChangePercent: peOi ? parseFloat(((peOiChange / peOi) * 100).toFixed(2)) : 0, volume: peQuote ? parseInt(peQuote.tradeVolume || 0) : 0 }
                 };
               });
             }
           }
         }
-      }
-      
-      // Load cached option chain if available
-      if (cachedOptionChain.length > 0) {
-        marketData.optionChain = cachedOptionChain;
+        if (cachedOptionChain.length > 0) marketData.optionChain = cachedOptionChain;
       }
     } catch (err) {
-      console.error("Index: Failed to fetch real option chain quotes:", err);
+      console.error("Index: Failed to fetch real option chain quotes:", err.message);
     }
   }
 
