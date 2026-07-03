@@ -106,10 +106,13 @@ function broadcast(payload) {
   }
 }
 
+let lastSpotUpdateTime = 0;
+
 // Connect Angel One live spot feed to the simulator
 angelOneService.on('spotTick', ({ index, price }) => {
   if (index === 'NIFTY') {
     marketSimulator.niftySpot = price;
+    lastSpotUpdateTime = Date.now();
   } else if (index === 'BANKNIFTY') {
     marketSimulator.bankNiftySpot = price;
   } else if (index === 'VIX') {
@@ -141,6 +144,26 @@ marketSimulator.on('tick', async (marketData) => {
   marketSimulator.isLiveMode = angelOneService.isConnected;
   const connected = angelOneService.isConnected;
   const open = isMarketOpen();
+
+  // If live mode is connected, check if WebSocket feed has stopped updating
+  if (connected && open && (Date.now() - lastSpotUpdateTime > 3500)) {
+    try {
+      const idxQ = await angelOneService.getIndexQuotes(['99926000', '99926017']);
+      if (idxQ && idxQ.length > 0) {
+        idxQ.forEach(q => {
+          if (q.symbolToken === '99926000') {
+            marketSimulator.niftySpot = parseFloat(q.ltp || 0);
+            lastSpotUpdateTime = Date.now();
+          }
+          if (q.symbolToken === '99926017') {
+            marketSimulator.indiaVix = parseFloat(q.ltp || 0);
+          }
+        });
+      }
+    } catch (e) {
+      console.error("Index: Fallback REST spot quotes failed:", e.message);
+    }
+  }
 
   // If not connected, broadcast a minimal TICK with paper state so UI stays alive
   if (!connected) {
