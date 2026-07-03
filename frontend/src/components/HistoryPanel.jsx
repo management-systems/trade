@@ -54,8 +54,11 @@ export default function HistoryPanel({ history, metrics }) {
             </thead>
             <tbody className="divide-y divide-slate-900/40 text-slate-300">
               {[...history].reverse().map((trade, idx) => {
-                const timeString = new Date(trade.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                const isWin = trade.pnl > 0;
+                const timeString = trade.exitTime ? new Date(trade.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A';
+                const isWin = (trade.pnl || 0) > 0;
+                const entry = trade.entryPrice !== undefined && trade.entryPrice !== null ? parseFloat(trade.entryPrice) : 0;
+                const exit = trade.exitPrice !== undefined && trade.exitPrice !== null ? parseFloat(trade.exitPrice) : 0;
+                const pnlVal = trade.pnl !== undefined && trade.pnl !== null ? parseFloat(trade.pnl) : 0;
                 
                 return (
                   <tr key={trade.id || idx} className="hover:bg-slate-900/10">
@@ -66,9 +69,9 @@ export default function HistoryPanel({ history, metrics }) {
                         <span className="ml-1 text-[8px] bg-emerald-950 border border-emerald-800 text-emerald-400 px-1 rounded">AUTO</span>
                       )}
                     </td>
-                    <td className="py-2.5">{trade.quantity}</td>
-                    <td className="py-2.5 text-slate-400">₹{trade.entryPrice.toFixed(2)}</td>
-                    <td className="py-2.5 text-slate-300">₹{trade.exitPrice.toFixed(2)}</td>
+                    <td className="py-2.5">{trade.quantity || 0}</td>
+                    <td className="py-2.5 text-slate-400">₹{entry.toFixed(2)}</td>
+                    <td className="py-2.5 text-slate-300">₹{exit.toFixed(2)}</td>
                     <td className="py-2.5">
                       <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                         trade.reason === 'TARGET HIT' 
@@ -77,14 +80,14 @@ export default function HistoryPanel({ history, metrics }) {
                             ? 'bg-rose-950/20 text-rose-400 border border-rose-950/40' 
                             : 'bg-slate-950 border border-slate-900 text-slate-400'
                       }`}>
-                        {trade.reason}
+                        {trade.reason || 'CLOSED'}
                       </span>
                     </td>
                     <td className={`py-2.5 text-right font-extrabold flex items-center justify-end space-x-1 ${
                       isWin ? 'text-emerald-400' : 'text-rose-500'
                     }`}>
                       {isWin ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                      <span>₹{trade.pnl >= 0 ? '+' : ''}{trade.pnl.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span>₹{pnlVal >= 0 ? '+' : ''}{pnlVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </td>
                   </tr>
                 );

@@ -24,17 +24,20 @@ ChartJS.register(
   Filler
 );
 
-export default function PnLChart({ history }) {
-  // Construct cumulative P&L data series
+export default function PnLChart({ history = [] }) {
+  // Construct cumulative P&L data series safely
   const dataPoints = [0];
   let currentTotal = 0;
   
-  history.forEach(trade => {
-    currentTotal += trade.pnl;
+  const safeHistory = Array.isArray(history) ? history : [];
+  
+  safeHistory.forEach(trade => {
+    const pnlVal = trade && trade.pnl !== undefined && trade.pnl !== null ? parseFloat(trade.pnl) : 0;
+    currentTotal += pnlVal;
     dataPoints.push(currentTotal);
   });
 
-  const labels = ['Start', ...history.map((_, i) => `Trade ${i + 1}`)];
+  const labels = ['Start', ...safeHistory.map((_, i) => `Trade ${i + 1}`)];
   const isNetPositive = currentTotal >= 0;
 
   const data = {
