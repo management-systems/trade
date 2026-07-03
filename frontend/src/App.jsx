@@ -822,7 +822,7 @@ export default function App() {
               <span className="text-slate-300 font-bold block mb-2">Instrument Info:</span>
               <p>- Option contracts are resolved dynamically around Nifty spot strikes.</p>
               <p>- Automatic caching layers prevent slow network startups.</p>
-              <p>- Active Port Bindings: Backend Port **5071** | Frontend Port **5072**</p>
+              <p>- Active Port Bindings: Backend Port **5072** | Frontend Port **5173**</p>
             </div>
           </div>
         )}

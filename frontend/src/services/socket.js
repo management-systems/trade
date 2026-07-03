@@ -3,7 +3,7 @@ class WebSocketManager {
     // Use env variable; fall back to auto-detecting wss vs ws based on current page protocol
     const envWs = import.meta.env.VITE_WS_URL;
     const autoWs = window.location.protocol === 'https:'
-      ? `wss://${window.location.host}`
+      ? `wss://trade.managementsystems.in`
       : `ws://localhost:5072`;
     this.url = envWs || autoWs;
     this.ws = null;
