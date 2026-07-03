@@ -38,6 +38,8 @@ app.use(cors({
     if (/^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return callback(null, true);
     // Allow production domains
     if (productionOrigins.includes(origin)) return callback(null, true);
+    // Allow all Vercel preview deployments
+    if (/\.vercel\.app$/.test(origin)) return callback(null, true);
     callback(new Error(`CORS: Origin '${origin}' not allowed`));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
