@@ -11,8 +11,9 @@ import PnLChart from './components/PnLChart';
 import CriteriaPanel from './components/CriteriaPanel';
 import CEDecisionCard from './components/CEDecisionCard';
 import PEDecisionCard from './components/PEDecisionCard';
-import { api } from './services/api';
+import AutoTradePanel from './components/AutoTradePanel';
 import { socket } from './services/socket';
+import { api } from './services/api';
 
 export default function App() {
   const [isConnected, setIsConnected] = useState(false);
@@ -20,25 +21,34 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   
   // Custom signal criteria active settings
-  const [criteriaSettings, setCriteriaSettings] = useState({
-    vwap: true,
-    ema: true,
-    breakout: true,
-    volume: true,
-    oi: true,
-    rsi: true,
-    macd: true,
-    vix: true,
-    structure: true
+  const [criteriaSettings, setCriteriaSettings] = useState(() => {
+    const saved = localStorage.getItem('criteriaSettings');
+    return saved ? JSON.parse(saved) : {
+      vwap: true,
+      ema: true,
+      breakout: true,
+      volume: true,
+      oi: true,
+      rsi: true,
+      macd: true,
+      vix: true,
+      structure: true
+    };
   });
 
   // Dynamic Rule Threshold settings
-  const [thresholds, setThresholds] = useState({
-    rsiBullish: 55,
-    rsiBearish: 45,
-    vixMax: 22,
-    volumeMult: 1.3
+  const [thresholds, setThresholds] = useState(() => {
+    const saved = localStorage.getItem('thresholds');
+    return saved ? JSON.parse(saved) : {
+      rsiBullish: 55,
+      rsiBearish: 45,
+      vixMax: 22,
+      volumeMult: 1.3
+    };
   });
+
+  // Live positions list from broker
+  const [livePositions, setLivePositions] = useState([]);
 
   // Angel One Login state
   const [apiStatus, setApiStatus] = useState({
@@ -83,6 +93,13 @@ export default function App() {
 
       const paperData = await api.getPaperState();
       setPaperState(paperData);
+
+      if (authStatus.connected) {
+        const livePos = await api.getLivePositions();
+        setLivePositions(livePos.positions || []);
+      } else {
+        setLivePositions([]);
+      }
     } catch (err) {
       console.error("Error synchronizing status on startup:", err);
     }
@@ -90,6 +107,9 @@ export default function App() {
 
   useEffect(() => {
     syncSystemState();
+    // Retry after 3s and 7s to catch backend auto-login completing
+    const retryA = setTimeout(syncSystemState, 3000);
+    const retryB = setTimeout(syncSystemState, 7000);
 
     // Poll live credentials status and account funds every 10 seconds
     const statusInterval = setInterval(() => {
@@ -150,10 +170,21 @@ export default function App() {
     });
 
     return () => {
+      clearTimeout(retryA);
+      clearTimeout(retryB);
       clearInterval(statusInterval);
       socket.close();
     };
   }, []);
+
+  // Save scanner custom filters & thresholds to local storage when changed
+  useEffect(() => {
+    localStorage.setItem('criteriaSettings', JSON.stringify(criteriaSettings));
+  }, [criteriaSettings]);
+
+  useEffect(() => {
+    localStorage.setItem('thresholds', JSON.stringify(thresholds));
+  }, [thresholds]);
 
   // Quick select prefill from Option Chain
   const handleSelectContract = (symbol, optionType, strike, ltp) => {
@@ -409,7 +440,7 @@ export default function App() {
         const result = await api.placeLiveOrder({
           symbol,
           strike,
-          quantity: 25, 
+          quantity: 65, 
           transactionType: 'BUY',
           optionType
         });
@@ -422,7 +453,7 @@ export default function App() {
           optionType,
           strike,
           entryPrice: marketData.optionChain.find(i => i.strike === strike)?.[optionType === 'CE' ? 'ce' : 'pe'].ltp || 10,
-          quantity: 25, 
+          quantity: 65, 
           isAutoSignal: true,
           entryCriteria: {
             niftySpot: marketData.niftySpot,
@@ -505,6 +536,16 @@ export default function App() {
             }`}
           >
             MORE OPTIONS
+          </button>
+          <button
+            onClick={() => setActiveTab('autoTrade')}
+            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition whitespace-nowrap ${
+              activeTab === 'autoTrade'
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
+            }`}
+          >
+            AUTO‑TRADE
           </button>
         </div>
       </div>
@@ -641,11 +682,13 @@ export default function App() {
             {/* Positions Table & Manual Entry Console */}
             <PaperTrade 
               paperState={paperState}
+              livePositions={livePositions}
               optionChain={marketData.optionChain}
               selectedPreFill={selectedPreFill}
               onClosePreFill={() => setSelectedPreFill(null)}
               onRefresh={syncSystemState}
               liveModeActive={liveModeActive}
+              apiStatus={apiStatus}
               marketData={marketData}
               customSignal={customSignal}
             />
@@ -769,6 +812,7 @@ export default function App() {
             thresholds={thresholds}
             onThresholdChange={handleThresholdChange}
             marketData={marketData}
+            customSignal={customSignal}
           />
         )}
 
@@ -782,6 +826,9 @@ export default function App() {
           </div>
         )}
 
+        {activeTab === 'autoTrade' && (
+          <AutoTradePanel onRefresh={syncSystemState} />
+        )}
         {/* Tab 5: More Options & Diagnostics */}
         {activeTab === 'more' && (
           <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-6 max-w-4xl mx-auto">

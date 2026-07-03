@@ -4,21 +4,25 @@ import { api } from '../services/api';
 
 export default function PaperTrade({ 
   paperState, 
+  livePositions = [],
   optionChain, 
   selectedPreFill, 
   onClosePreFill, 
   onRefresh,
   liveModeActive,
+  apiStatus,
   marketData,
   customSignal
 }) {
-  const { positions = [], risk = {} } = paperState || {};
+  const isLiveOpen = liveModeActive && apiStatus?.connected;
+  const { positions: paperPositions = [], risk = {} } = paperState || {};
+  const positions = isLiveOpen ? livePositions : paperPositions;
 
   // Form State
   const [formData, setFormData] = useState({
     optionType: 'CE',
     strike: '',
-    quantity: '25', // 1 lot default
+    quantity: '65', // 1 lot default
     slPoints: '15',
     targetPoints: '30',
     entryPrice: ''
@@ -32,7 +36,7 @@ export default function PaperTrade({
       setFormData({
         optionType: selectedPreFill.optionType,
         strike: selectedPreFill.strike.toString(),
-        quantity: '25',
+        quantity: selectedPreFill.quantity ? selectedPreFill.quantity.toString() : '65',
         slPoints: '15',
         targetPoints: '30',
         entryPrice: selectedPreFill.ltp.toString()
@@ -83,8 +87,8 @@ export default function PaperTrade({
       setError('Please select a valid Strike price.');
       return;
     }
-    if (qtyNum <= 0 || qtyNum % 25 !== 0) {
-      setError('Quantity must be a positive multiple of 25 (Nifty lot size).');
+    if (qtyNum <= 0 || qtyNum % 65 !== 0) {
+      setError('Quantity must be a positive multiple of 65 (Nifty lot size).');
       return;
     }
     if (isNaN(priceNum) || priceNum <= 0) {
@@ -96,7 +100,7 @@ export default function PaperTrade({
       // Formulate contract symbol
       const symbol = `NIFTY26JUL${strikeNum}${formData.optionType}`;
 
-      if (liveModeActive) {
+      if (isLiveOpen) {
         // In real live mode, order places through actual Angel One API
         const result = await api.placeLiveOrder({
           symbol,
@@ -140,12 +144,28 @@ export default function PaperTrade({
     }
   };
 
-  const handleExitPosition = async (id, currentLtp) => {
-    try {
-      await api.closePaperPosition(id, currentLtp, "MANUAL EXIT");
-      onRefresh();
-    } catch (err) {
-      alert(`Failed to exit position: ${err.message}`);
+  const handleExitPosition = async (pos) => {
+    const symbol = pos.symbol || pos.tradingsymbol;
+    const quantity = pos.quantity !== undefined ? pos.quantity : parseInt(pos.netqty || 0);
+    const transactionType = quantity > 0 ? 'BUY' : 'SELL';
+
+    if (isLiveOpen) {
+      const confirmExit = window.confirm(`Are you sure you want to SQUARE OFF live position: ${symbol} (${Math.abs(quantity)} shares)?`);
+      if (!confirmExit) return;
+
+      try {
+        await api.closeLivePosition(symbol, Math.abs(quantity), transactionType);
+        onRefresh();
+      } catch (err) {
+        alert(`Failed to square off live position: ${err.message}`);
+      }
+    } else {
+      try {
+        await api.closePaperPosition(pos.id, pos.ltp, "MANUAL EXIT");
+        onRefresh();
+      } catch (err) {
+        alert(`Failed to exit position: ${err.message}`);
+      }
     }
   };
 
@@ -174,28 +194,41 @@ export default function PaperTrade({
                 </thead>
                 <tbody className="divide-y divide-slate-900/40 text-slate-300">
                   {positions.map((pos) => {
-                    const pnl = pos.unrealizedPnl;
+                    const id = pos.id || pos.symboltoken || pos.tradingsymbol;
+                    const symbol = pos.symbol || pos.tradingsymbol;
+                    const qty = pos.quantity !== undefined ? pos.quantity : parseInt(pos.netqty || 0);
+                    const avgPrice = pos.entryPrice !== undefined ? pos.entryPrice : parseFloat(pos.buyprice || pos.averageprice || 0);
+                    const ltp = pos.ltp !== undefined ? parseFloat(pos.ltp) : 0;
+                    
+                    const pnl = pos.unrealizedPnl !== undefined 
+                      ? pos.unrealizedPnl 
+                      : (pos.pnl !== undefined ? parseFloat(pos.pnl) : (ltp - avgPrice) * qty);
+                    
                     const pnlColor = pnl >= 0 ? 'text-emerald-400' : 'text-rose-500';
+
+                    const slDisplay = pos.stopLoss !== undefined ? `₹${pos.stopLoss.toFixed(1)}` : 'N/A';
+                    const tgtDisplay = pos.target !== undefined ? `₹${pos.target.toFixed(1)}` : 'N/A';
+
                     return (
-                      <tr key={pos.id} className="hover:bg-slate-900/10">
+                      <tr key={id} className="hover:bg-slate-900/10">
                         <td className="py-3 font-semibold text-slate-200">
-                          {pos.symbol}
+                          {symbol}
                           {pos.isAutoSignal && (
                             <span className="ml-1 text-[8px] bg-emerald-950 border border-emerald-800 text-emerald-400 px-1 rounded">AUTO</span>
                           )}
                         </td>
-                        <td className="py-3">{pos.quantity}</td>
-                        <td className="py-3">₹{pos.entryPrice.toFixed(2)}</td>
-                        <td className="py-3 font-bold text-slate-100">₹{pos.ltp.toFixed(2)}</td>
+                        <td className="py-3">{qty}</td>
+                        <td className="py-3">₹{avgPrice.toFixed(2)}</td>
+                        <td className="py-3 font-bold text-slate-100">₹{ltp.toFixed(2)}</td>
                         <td className="py-3 text-slate-400">
-                          ₹{pos.stopLoss.toFixed(1)} / ₹{pos.target.toFixed(1)}
+                          {slDisplay} / {tgtDisplay}
                         </td>
                         <td className={`py-3 text-right font-extrabold ${pnlColor}`}>
                           ₹{pnl >= 0 ? '+' : ''}{pnl.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 text-center">
                           <button
-                            onClick={() => handleExitPosition(pos.id, pos.ltp)}
+                            onClick={() => handleExitPosition(pos)}
                             className="bg-rose-500/15 hover:bg-rose-600 text-rose-400 hover:text-slate-950 px-2 py-0.5 rounded border border-rose-500/25 transition text-[9px] font-bold"
                           >
                             EXIT
@@ -216,24 +249,41 @@ export default function PaperTrade({
         </div>
 
         {/* Unrealized summary */}
-        {positions.length > 0 && (
-          <div className="border-t border-slate-900 pt-3 mt-4 flex items-center justify-between font-mono">
-            <span className="text-xs text-slate-400">Total Floating Unrealized P&L:</span>
-            <span className={`text-sm font-extrabold ${
-              positions.reduce((sum, p) => sum + p.unrealizedPnl, 0) >= 0 ? 'text-emerald-400' : 'text-rose-500'
-            }`}>
-              ₹{positions.reduce((sum, p) => sum + p.unrealizedPnl, 0) >= 0 ? '+' : ''}
-              {positions.reduce((sum, p) => sum + p.unrealizedPnl, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-        )}
+        {positions.length > 0 && (() => {
+          const totalPnl = positions.reduce((sum, pos) => {
+            const qty = pos.quantity !== undefined ? pos.quantity : parseInt(pos.netqty || 0);
+            const avgPrice = pos.entryPrice !== undefined ? pos.entryPrice : parseFloat(pos.buyprice || pos.averageprice || 0);
+            const ltp = pos.ltp !== undefined ? parseFloat(pos.ltp) : 0;
+            const pnl = pos.unrealizedPnl !== undefined 
+              ? pos.unrealizedPnl 
+              : (pos.pnl !== undefined ? parseFloat(pos.pnl) : (ltp - avgPrice) * qty);
+            return sum + pnl;
+          }, 0);
+          
+          return (
+            <div className="border-t border-slate-900 pt-3 mt-4 flex items-center justify-between font-mono">
+              <span className="text-xs text-slate-400">Total Floating Unrealized P&L:</span>
+              <span className={`text-sm font-extrabold ${totalPnl >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+                ₹{totalPnl >= 0 ? '+' : ''}
+                {totalPnl.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          );
+        })()}
       </div>
 
       {/* 2. Manual Order Entry Form */}
       <div className="glass-panel p-4 rounded-2xl border border-slate-800">
-        <h3 className="text-xs font-mono text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2 mb-3">
-          Manual Trade Panel
-        </h3>
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+          <h3 className="text-xs font-mono text-slate-400 uppercase tracking-wider">
+            Manual Trade Panel
+          </h3>
+          <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded border ${
+            isLiveOpen ? 'bg-purple-950/40 text-purple-400 border-purple-900/30' : 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30'
+          }`}>
+            {isLiveOpen ? 'LIVE ORDER ACTIVE' : 'PAPER TRADING ACTIVE'}
+          </span>
+        </div>
 
         <form onSubmit={handlePlaceOrder} className="space-y-3 text-xs">
           <div className="grid grid-cols-2 gap-2">
@@ -275,8 +325,8 @@ export default function PaperTrade({
                 name="quantity"
                 value={formData.quantity}
                 onChange={handleInputChange}
-                step="25"
-                min="25"
+                step="65"
+                min="65"
                 required
                 className="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 font-mono text-slate-200 focus:outline-none"
               />
@@ -345,7 +395,7 @@ export default function PaperTrade({
             }`}
           >
             <ShoppingCart className="h-4 w-4 mr-1.5" />
-            {liveModeActive ? 'Place Live Order' : 'Buy Option'}
+            {isLiveOpen ? 'Place Live Order' : 'Place Paper Order'}
           </button>
         </form>
       </div>

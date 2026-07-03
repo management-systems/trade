@@ -17,8 +17,11 @@ const TradeSchema = new mongoose.Schema({
   exitTime: { type: Date },
   pnl: { type: Number },
   reason: { type: String },
+  lots: { type: Number, default: 1 },
+  stopLossPct: { type: Number },
+  profitPct: { type: Number },
+  isAutoTrade: { type: Boolean, default: false },
   isAutoSignal: { type: Boolean, default: false },
-  entryCriteria: { type: mongoose.Schema.Types.Mixed }
 });
 
 export default mongoose.model('Trade', TradeSchema);

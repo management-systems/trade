@@ -1,7 +1,7 @@
 import React from 'react';
 import { ToggleLeft, ToggleRight, Check, X, ShieldAlert, Settings, Info } from 'lucide-react';
 
-export default function CriteriaPanel({ settings, onToggle, thresholds, onThresholdChange, marketData }) {
+export default function CriteriaPanel({ settings, onToggle, thresholds, onThresholdChange, marketData, customSignal }) {
   const spot = marketData.niftySpot || 0;
   const indicators = marketData.indicators || {};
   const optionChain = marketData.optionChain || [];
@@ -147,9 +147,51 @@ export default function CriteriaPanel({ settings, onToggle, thresholds, onThresh
   ];
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-      
-      {/* Col 1: Configurator and Thresholds */}
+    <div className="space-y-6">
+      {/* Dynamic Probability Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="glass-panel p-5 rounded-2xl border border-slate-800 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">CE (Call Option) Probability</span>
+            <span className="text-3xl font-black font-mono text-emerald-400 mt-1 block">
+              {customSignal?.ceConfidence || 0}%
+            </span>
+          </div>
+          <div className="bg-emerald-950/20 border border-emerald-900/30 px-3 py-1.5 rounded-lg text-emerald-450 font-mono text-xs">
+            BULLISH FOCUS
+          </div>
+        </div>
+
+        <div className="glass-panel p-5 rounded-2xl border border-slate-800 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">PE (Put Option) Probability</span>
+            <span className="text-3xl font-black font-mono text-rose-500 mt-1 block">
+              {customSignal?.peConfidence || 0}%
+            </span>
+          </div>
+          <div className="bg-rose-950/20 border border-rose-900/30 px-3 py-1.5 rounded-lg text-rose-455 font-mono text-xs">
+            BEARISH FOCUS
+          </div>
+        </div>
+
+        <div className="glass-panel p-5 rounded-2xl border border-slate-800 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Net Directional Bias</span>
+            <span className={`text-3xl font-black font-mono mt-1 block ${
+              (customSignal?.bias || 0) > 0 ? 'text-emerald-400' : (customSignal?.bias || 0) < 0 ? 'text-rose-500' : 'text-slate-400'
+            }`}>
+              {(customSignal?.bias || 0) > 0 ? '+' : ''}{customSignal?.bias || 0}
+            </span>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-slate-300 font-mono text-xs uppercase">
+            {Math.abs(customSignal?.bias || 0) > 30 ? 'Strong Trend' : 'Rangebound'}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        
+        {/* Col 1: Configurator and Thresholds */}
       <div className="glass-panel p-5 rounded-2xl border border-slate-800 xl:col-span-1 space-y-6">
         <div className="border-b border-slate-800 pb-3 mb-2 flex items-center space-x-2">
           <Settings className="h-5 w-5 text-emerald-400" />
@@ -357,6 +399,7 @@ export default function CriteriaPanel({ settings, onToggle, thresholds, onThresh
         </div>
       </div>
       
+      </div>
     </div>
   );
 }

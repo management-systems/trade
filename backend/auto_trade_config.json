@@ -1,0 +1,26 @@
+{
+  "liveEnabled": true,
+  "params": {
+    "lots": 2,
+    "stopLossPct": 10,
+    "profitPct": 15
+  },
+  "criteria": {
+    "ce": {
+      "betterModel": true,
+      "bullishStructure": true,
+      "priceAboveVWAP": true,
+      "resistanceBreakout": true,
+      "volumeAbove150": true,
+      "futuresLongBuild": true
+    },
+    "pe": {
+      "marketStructure": true,
+      "priceBelowVWAP": true,
+      "ema20BelowEma50": true,
+      "supportBreakdown": true,
+      "sellingVolumeAbove150": true,
+      "futuresShortBuild": true
+    }
+  }
+}

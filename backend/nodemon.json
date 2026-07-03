@@ -1,0 +1,13 @@
+{
+  "watch": [
+    "src/"
+  ],
+  "ext": "js,json",
+  "ignore": [
+    "**/scrips_cache.json",
+    "**/db.json",
+    "**/auto_trade_config.json",
+    "**/error.log",
+    "**/*.log"
+  ]
+}

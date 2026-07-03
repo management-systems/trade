@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon --ignore scrips_cache.json --ignore db.json --ignore auto_trade_config.json --ignore error.log src/index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

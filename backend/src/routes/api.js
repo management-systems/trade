@@ -1,7 +1,8 @@
 import express from 'express';
 import angelOneService from '../services/angelone.js';
 import paperTrader from '../services/paperTrader.js';
-import riskManager from '../services/riskManager.js';
+import * as autoTradeState from '../services/autoTradeState.js';
+import autoTradeRoutes from './autoTradeRoutes.js';
 import marketSimulator from '../services/simulator.js';
 import { analyzeSignal } from '../services/signalEngine.js';
 
@@ -34,8 +35,8 @@ router.get('/auth/status', async (req, res) => {
   }
   res.json({
     connected: angelOneService.isConnected,
-    clientCode: angelOneService.session?.clientcode || null,
-    clientName: angelOneService.session?.clientname || 'Active User',
+    clientCode: angelOneService.clientCode || null,
+    clientName: angelOneService.clientName || 'Active User',
     funds
   });
 });
@@ -163,4 +164,31 @@ router.post('/live/order', async (req, res) => {
   }
 });
 
+// Fetch active live positions from Angel One
+router.get('/live/positions', async (req, res) => {
+  try {
+    const positions = await angelOneService.getPositions();
+    res.json({ success: true, positions });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Square off / Close an active live position
+router.post('/live/close', async (req, res) => {
+  const { symbol, quantity, transactionType } = req.body;
+  try {
+    const result = await angelOneService.placeOrder({
+      symbol,
+      strike: 0,
+      quantity: Math.abs(parseInt(quantity)),
+      transactionType: transactionType === 'BUY' ? 'SELL' : 'BUY', // Opposite action
+      optionType: symbol.endsWith('CE') ? 'CE' : 'PE'
+    });
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+router.use('/auto-trade', autoTradeRoutes);
 export default router;

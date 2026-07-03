@@ -8,12 +8,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const config = {
-  PORT: process.env.PORT || 5071,
+  PORT: process.env.PORT || 5072,
   DB_PATH: path.join(__dirname, '../db.json'),
   
   // Paper Trading Configuration
   STARTING_BALANCE: 100000, // ₹1,00,000 virtual balance
-  NIFTY_LOT_SIZE: 25,       // Standard Nifty lot size
+  NIFTY_LOT_SIZE: 65,       // Updated Nifty lot size
   DEFAULT_SL_POINTS: 15,     // default Stop Loss in option premium points
   DEFAULT_TARGET_POINTS: 30, // default Target in option premium points
   
@@ -38,5 +38,10 @@ export const config = {
     API_KEY: process.env.ANGEL_ONE_API_KEY || '',
     TOTP_SECRET: process.env.ANGEL_ONE_TOTP_SECRET || '',
     FEED_TYPE: 'mktdatalong'
+  },
+  // Option Chain Settings
+  OPTION_CHAIN: {
+    SCRIP_MASTER_URL: "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json",
+    DEFAULT_EXPIRY_DAYS_AHEAD: 3
   }
 };

@@ -1,6 +1,6 @@
 class WebSocketManager {
   constructor() {
-    this.url = 'ws://localhost:5071';
+    this.url = 'ws://localhost:5072';
     this.ws = null;
     this.listeners = {};
     this.reconnectTimer = null;

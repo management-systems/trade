@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:5071/api';
+const BASE_URL = 'http://localhost:5072/api';
 
 export async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
@@ -43,6 +43,13 @@ export const api = {
   
   // Live Trading
   placeLiveOrder: (orderParams) => request('/live/order', { method: 'POST', body: orderParams }),
+  getLivePositions: () => request('/live/positions'),
+  closeLivePosition: (symbol, quantity, transactionType) => request('/live/close', { method: 'POST', body: { symbol, quantity, transactionType } }),
+
+  // Auto‑Trade configuration
+  getAutoTradeConfig: () => request('/auto-trade/config'),
+  updateAutoTradeConfig: (config) => request('/auto-trade/config', { method: 'POST', body: config }),
+  toggleAutoTradeLive: (enabled) => request('/auto-trade/toggle', { method: 'POST', body: { enabled } }),
 
   // Risk Management
   getRiskConfig: () => request('/risk/config'),
