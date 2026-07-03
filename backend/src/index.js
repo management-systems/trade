@@ -166,18 +166,17 @@ marketSimulator.on('tick', async (marketData) => {
     }
   }
 
-  // If not connected, broadcast a minimal TICK with paper state so UI stays alive
   if (!connected) {
     const paperStateFallback = await paperTrader.getAccountState().catch(() => null);
     const liveStateFallback = await liveTrader.getAccountState().catch(() => null);
     broadcast({
       type: 'TICK',
       timestamp: new Date().toISOString(),
-      niftySpot: marketData.niftySpot || 0,
-      bankNiftySpot: marketData.bankNiftySpot || 0,
-      indiaVix: marketData.indiaVix || 14.5,
+      niftySpot: 0,
+      bankNiftySpot: 0,
+      indiaVix: 14.5,
       futuresOi: 0, futuresPrice: 0, futuresContractOi: 0, futuresOiChange: 0,
-      optionChain: cachedOptionChain,
+      optionChain: [],
       signal: { type: 'NO TRADE', confidence: 0, reason: 'Broker feed offline', atmStrike: null },
       indicators: {}, candles: [],
       paper: paperStateFallback,
