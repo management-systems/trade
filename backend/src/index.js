@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import cors from 'cors';
@@ -187,18 +188,8 @@ marketSimulator.on('tick', async (marketData) => {
     return;
   }
 
-  // When market is closed — fetch last known spot via REST, then broadcast frozen data
+  // When market is closed — broadcast the cached closing values directly
   if (!open) {
-    try {
-      if (marketData.niftySpot <= 0) {
-        const idxQ = await angelOneService.getIndexQuotes(['99926000', '99926017']);
-        if (idxQ) idxQ.forEach(q => {
-          if (q.symbolToken === '99926000') marketSimulator.niftySpot = parseFloat(q.ltp || 0);
-          if (q.symbolToken === '99926017') marketSimulator.indiaVix = parseFloat(q.ltp || 0);
-        });
-      }
-    } catch (e) { /* ignore off-hours REST errors */ }
-
     const paperStateClosed = await paperTrader.getAccountState().catch(() => null);
     const liveStateClosed = await liveTrader.getAccountState().catch(() => null);
     const signalClosed = analyzeSignal(marketData);
@@ -213,7 +204,7 @@ marketSimulator.on('tick', async (marketData) => {
       futuresContractOi: marketData.futuresContractOi || 0,
       futuresOiChange: 0,
       optionChain: cachedOptionChain.length > 0 ? cachedOptionChain : (marketData.optionChain || []),
-      signal: { type: signalClosed.signalType, confidence: signalClosed.confidence, reason: 'Market Closed — Frozen closing prices', atmStrike: signalClosed.atmStrike },
+      signal: { type: signalClosed.signalType, confidence: signalClosed.confidence, reason: 'Market Closed — Showing last updated closing rates', atmStrike: signalClosed.atmStrike },
       indicators: signalClosed.indicators,
       candles: marketData.candles || [],
       paper: paperStateClosed,
@@ -482,6 +473,25 @@ if (isLiveAutoEnabled && strike > 0 && marketData.optionChain && marketData.opti
   };
 
   broadcast(streamPayload);
+
+  // Cache last updated live market data
+  if (connected && marketData.niftySpot > 0) {
+    try {
+      const dataToSave = {
+        niftySpot: marketData.niftySpot,
+        bankNiftySpot: marketData.bankNiftySpot,
+        indiaVix: marketData.indiaVix,
+        futuresOi: marketData.futuresOi,
+        futuresPrice: marketData.futuresPrice,
+        futuresContractOi: marketData.futuresContractOi,
+        optionChain: marketData.optionChain,
+        candles: marketData.candles
+      };
+      fs.writeFileSync('./last_market_data.json', JSON.stringify(dataToSave, null, 2), 'utf8');
+    } catch (e) {
+      // Ignore write errors
+    }
+  }
 });
 
 // Boot Services
@@ -524,6 +534,25 @@ async function boot() {
     }
   } else {
     console.log("AngelOne: Credentials missing in .env. Running in standalone local simulator mode.");
+  }
+
+  // Load cached market data if available
+  try {
+    if (fs.existsSync('./last_market_data.json')) {
+      const lastData = JSON.parse(fs.readFileSync('./last_market_data.json', 'utf8'));
+      marketSimulator.niftySpot = lastData.niftySpot || 0;
+      marketSimulator.bankNiftySpot = lastData.bankNiftySpot || 0;
+      marketSimulator.indiaVix = lastData.indiaVix || 14.5;
+      marketSimulator.futuresOi = lastData.futuresOi || 0;
+      marketSimulator.futuresPrice = lastData.futuresPrice || 0;
+      marketSimulator.futuresContractOi = lastData.futuresContractOi || 0;
+      marketSimulator.optionChain = lastData.optionChain || [];
+      marketSimulator.candles = lastData.candles || [];
+      cachedOptionChain = lastData.optionChain || [];
+      console.log(`Simulator: Seeded last updated market data. Spot: ${marketSimulator.niftySpot}`);
+    }
+  } catch (err) {
+    console.error("Simulator: Failed to load last market data cache:", err.message);
   }
 
   // Start market data loop
