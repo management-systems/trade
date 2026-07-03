@@ -527,6 +527,19 @@ async function boot() {
     console.log(`  http://localhost:${config.PORT}`);
     console.log(`===================================================`);
   });
+
+  // Gracefully handle port-in-use errors (e.g. nodemon fast-restart)
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[WARN] Port ${config.PORT} already in use. Retrying in 1.5s...`);
+      server.close();
+      setTimeout(() => {
+        server.listen(config.PORT);
+      }, 1500);
+    } else {
+      throw err;
+    }
+  });
 }
 
 boot();
