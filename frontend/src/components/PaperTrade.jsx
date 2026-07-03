@@ -16,7 +16,13 @@ export default function PaperTrade({
 }) {
   const isLiveOpen = liveModeActive && apiStatus?.connected;
   const { positions: paperPositions = [], risk = {} } = paperState || {};
-  const positions = isLiveOpen ? livePositions : paperPositions;
+  const allPositions = isLiveOpen ? livePositions : paperPositions;
+
+  // Filter out closed positions (qty is 0) from active positions view
+  const positions = allPositions.filter(pos => {
+    const qty = pos.quantity !== undefined ? pos.quantity : parseInt(pos.netqty || 0);
+    return qty !== 0;
+  });
 
   // Form State
   const [formData, setFormData] = useState({
