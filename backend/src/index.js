@@ -23,19 +23,21 @@ import { analyzeSignal } from './services/signalEngine.js';
 
 const app = express();
 
-// CORS — allow local dev and production domain
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
+// CORS — allow any localhost port (dev) + production domain
+const productionOrigins = [
   'https://trade.managementsystems.in',
   'https://www.trade.managementsystems.in'
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (curl, mobile apps, same-server)
+    // Allow requests with no origin (curl, Postman, server-to-server)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow any localhost port for local development
+    if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+    if (/^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return callback(null, true);
+    // Allow production domains
+    if (productionOrigins.includes(origin)) return callback(null, true);
     callback(new Error(`CORS: Origin '${origin}' not allowed`));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
