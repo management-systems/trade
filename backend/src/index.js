@@ -22,7 +22,27 @@ import scripMaster from './services/scripMaster.js';
 import { analyzeSignal } from './services/signalEngine.js';
 
 const app = express();
-app.use(cors());
+
+// CORS — allow local dev and production domain
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://trade.managementsystems.in',
+  'https://www.trade.managementsystems.in'
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, mobile apps, same-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: Origin '${origin}' not allowed`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
 app.use(express.json());
 
 // Bind routes

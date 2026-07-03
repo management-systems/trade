@@ -1,6 +1,11 @@
 class WebSocketManager {
   constructor() {
-    this.url = 'ws://localhost:5072';
+    // Use env variable; fall back to auto-detecting wss vs ws based on current page protocol
+    const envWs = import.meta.env.VITE_WS_URL;
+    const autoWs = window.location.protocol === 'https:'
+      ? `wss://${window.location.host}`
+      : `ws://localhost:5072`;
+    this.url = envWs || autoWs;
     this.ws = null;
     this.listeners = {};
     this.reconnectTimer = null;
