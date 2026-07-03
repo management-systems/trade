@@ -22,6 +22,7 @@ const TradeSchema = new mongoose.Schema({
   profitPct: { type: Number },
   isAutoTrade: { type: Boolean, default: false },
   isAutoSignal: { type: Boolean, default: false },
+  isLive: { type: Boolean, default: false },
 });
 
 export default mongoose.model('Trade', TradeSchema);

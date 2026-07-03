@@ -44,6 +44,7 @@ export const api = {
   // Live Trading
   placeLiveOrder: (orderParams) => request('/live/order', { method: 'POST', body: orderParams }),
   getLivePositions: () => request('/live/positions'),
+  getLiveState: () => request('/live/state'),
   closeLivePosition: (symbol, quantity, transactionType) => request('/live/close', { method: 'POST', body: { symbol, quantity, transactionType } }),
 
   // Auto‑Trade configuration

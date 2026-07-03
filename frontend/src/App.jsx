@@ -82,10 +82,19 @@ export default function App() {
     risk: { maxTradesPerDay: 3, maxLossPerDay: 1000, tradesTakenToday: 0, realizedPnlToday: 0, totalDailyPnl: 0, limitHit: false }
   });
 
+  // Live trading balance & logs state
+  const [liveState, setLiveState] = useState({
+    balance: 0,
+    positions: [],
+    history: [],
+    metrics: { totalTrades: 0, winningTrades: 0, losingTrades: 0, winRatio: 0 },
+    risk: { maxTradesPerDay: 10, maxLossPerDay: 5000, tradesTakenToday: 0, realizedPnlToday: 0, totalDailyPnl: 0, limitHit: false }
+  });
+
   // Prefill state from clicking option chain cart icon
   const [selectedPreFill, setSelectedPreFill] = useState(null);
 
-  // Sync Angel One and Paper Trading details on startup
+  // Sync Angel One, Paper Trading and Live Trading details on startup
   const syncSystemState = async () => {
     try {
       const authStatus = await api.checkAngelOneStatus();
@@ -93,6 +102,13 @@ export default function App() {
 
       const paperData = await api.getPaperState();
       setPaperState(paperData);
+
+      try {
+        const liveData = await api.getLiveState();
+        setLiveState(liveData);
+      } catch (err) {
+        console.warn("Could not fetch live state:", err.message);
+      }
 
       if (authStatus.connected) {
         const livePos = await api.getLivePositions();
@@ -148,6 +164,9 @@ export default function App() {
 
         if (data.paper) {
           setPaperState(data.paper);
+        }
+        if (data.liveState) {
+          setLiveState(data.liveState);
         }
       }
 
@@ -662,7 +681,7 @@ export default function App() {
             {/* Trade History Executions Log */}
             <div className="glass-panel p-5 rounded-2xl border border-slate-800 space-y-3.5 font-mono text-[11px]">
               <span className="text-[10px] text-slate-500 uppercase font-bold block border-b border-slate-900 pb-2">
-                Execution Log (Trade History)
+                Execution Log (Trade History — {liveModeActive ? 'LIVE' : 'PAPER'})
               </span>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
@@ -679,7 +698,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-950/20 text-slate-300">
-                    {paperState.history.slice(0, 5).map((log, idx) => (
+                    {(liveModeActive ? liveState : paperState).history.slice(0, 5).map((log, idx) => (
                       <tr key={idx} className="hover:bg-slate-900/10">
                         <td className="py-2.5">{new Date(log.timestamp).toLocaleTimeString()}</td>
                         <td className="py-2.5 text-slate-200 font-bold">{log.symbol}</td>
@@ -705,7 +724,7 @@ export default function App() {
                         </td>
                       </tr>
                     ))}
-                    {paperState.history.length === 0 && (
+                    {(liveModeActive ? liveState : paperState).history.length === 0 && (
                       <tr>
                         <td colSpan="8" className="py-4 text-center text-slate-500 italic">
                           No recent executions logged. Terminal is ready to scan breakout signals.
@@ -725,47 +744,47 @@ export default function App() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 glass-panel p-6 rounded-2xl border border-slate-800">
                 <h3 className="text-xs font-mono text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-800/60 pb-2">
-                  Equity Curve Chart
+                  Equity Curve Chart ({liveModeActive ? 'LIVE' : 'PAPER'})
                 </h3>
-                <PnLChart history={paperState.history} />
+                <PnLChart history={(liveModeActive ? liveState : paperState).history} />
               </div>
 
               <div className="glass-panel p-6 rounded-2xl border border-slate-800 flex flex-col justify-between">
                 <div>
                   <h3 className="text-xs font-mono text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-800 pb-2">
-                    Performance Metrics
+                    Performance Metrics ({liveModeActive ? 'LIVE' : 'PAPER'})
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-slate-950 p-4 rounded-xl border border-slate-900">
                       <span className="text-[10px] font-mono text-slate-500 block">TOTAL TRADES</span>
-                      <span className="text-2xl font-bold font-mono text-slate-200">{paperState.metrics.totalTrades}</span>
+                      <span className="text-2xl font-bold font-mono text-slate-200">{(liveModeActive ? liveState : paperState).metrics.totalTrades}</span>
                     </div>
                     <div className="bg-slate-950 p-4 rounded-xl border border-slate-900">
                       <span className="text-[10px] font-mono text-slate-500 block">WIN RATIO</span>
-                      <span className="text-2xl font-bold font-mono text-emerald-400">{paperState.metrics.winRatio}%</span>
+                      <span className="text-2xl font-bold font-mono text-emerald-400">{(liveModeActive ? liveState : paperState).metrics.winRatio}%</span>
                     </div>
                     <div className="bg-slate-950 p-4 rounded-xl border border-slate-900">
                       <span className="text-[10px] font-mono text-slate-500 block">WINS</span>
-                      <span className="text-xl font-bold font-mono text-emerald-400">{paperState.metrics.winningTrades}</span>
+                      <span className="text-xl font-bold font-mono text-emerald-400">{(liveModeActive ? liveState : paperState).metrics.winningTrades}</span>
                     </div>
                     <div className="bg-slate-950 p-4 rounded-xl border border-slate-900">
                       <span className="text-[10px] font-mono text-slate-500 block">LOSSES</span>
-                      <span className="text-xl font-bold font-mono text-rose-500">{paperState.metrics.losingTrades}</span>
+                      <span className="text-xl font-bold font-mono text-rose-500">{(liveModeActive ? liveState : paperState).metrics.losingTrades}</span>
                     </div>
                   </div>
                 </div>
                 <div className="bg-slate-950 p-4 rounded-xl border border-slate-900 mt-6">
                   <span className="text-[10px] font-mono text-slate-500 block">REALIZED SESSION P&L</span>
-                  <span className={`text-2xl font-black font-mono ${paperState.risk.realizedPnlToday >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-                    ₹{paperState.risk.realizedPnlToday >= 0 ? '+' : ''}{paperState.risk.realizedPnlToday.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  <span className={`text-2xl font-black font-mono ${(liveModeActive ? liveState : paperState).risk.realizedPnlToday >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+                    ₹{(liveModeActive ? liveState : paperState).risk.realizedPnlToday >= 0 ? '+' : ''}{(liveModeActive ? liveState : paperState).risk.realizedPnlToday.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
             </div>
 
             <HistoryPanel 
-              history={paperState.history} 
-              metrics={paperState.metrics} 
+              history={(liveModeActive ? liveState : paperState).history} 
+              metrics={(liveModeActive ? liveState : paperState).metrics} 
             />
           </div>
         )}

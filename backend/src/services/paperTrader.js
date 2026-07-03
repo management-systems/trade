@@ -35,8 +35,8 @@ class PaperTrader {
     if (mongoose.connection.readyState === 1 && !this.mongoLoaded) {
       try {
         console.log("PaperTrader: Synchronizing state with MongoDB...");
-        const activeDocs = await TradeModel.find({ exitTime: { $exists: false } });
-        const closedDocs = await TradeModel.find({ exitTime: { $exists: true } });
+        const activeDocs = await TradeModel.find({ isLive: { $ne: true }, exitTime: { $exists: false } });
+        const closedDocs = await TradeModel.find({ isLive: { $ne: true }, exitTime: { $exists: true } });
 
         this.positions = activeDocs.map(doc => {
           const obj = doc.toObject();
@@ -144,7 +144,8 @@ class PaperTrader {
       targetPoints: target,
       entryTime: new Date(),
       isAutoSignal,
-      entryCriteria
+      entryCriteria,
+      isLive: false
     };
 
     // Deduct margin from balance

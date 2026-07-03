@@ -6,6 +6,7 @@ import autoTradeRoutes from './autoTradeRoutes.js';
 import marketSimulator from '../services/simulator.js';
 import { analyzeSignal } from '../services/signalEngine.js';
 import riskManager from '../services/riskManager.js';
+import liveTrader from '../services/liveTrader.js';
 
 const router = express.Router();
 
@@ -159,6 +160,29 @@ router.post('/live/order', async (req, res) => {
       transactionType: transactionType || 'BUY',
       optionType
     });
+
+    // Record live trade entry in MongoDB
+    let entryPrice = 10.0;
+    const latestMarket = marketSimulator.getLatestData();
+    if (latestMarket && latestMarket.optionChain) {
+      const matched = latestMarket.optionChain.find(c => c.strike === parseInt(strike));
+      if (matched) {
+        entryPrice = optionType === 'CE' ? matched.ce.ltp : matched.pe.ltp;
+      }
+    }
+
+    await liveTrader.recordEntry({
+      symbol,
+      strike,
+      quantity,
+      entryPrice,
+      optionType,
+      slPoints: 15,
+      targetPoints: 30,
+      isAutoSignal: false,
+      entryCriteria: { niftySpot: latestMarket?.niftySpot || 0, reasons: ["Manual Order Live"] }
+    });
+
     res.json({ success: true, result });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -186,10 +210,37 @@ router.post('/live/close', async (req, res) => {
       transactionType: transactionType === 'BUY' ? 'SELL' : 'BUY', // Opposite action
       optionType: symbol.endsWith('CE') ? 'CE' : 'PE'
     });
+
+    // Record exit in live trade database
+    let exitPrice = 10.0;
+    const latestMarket = marketSimulator.getLatestData();
+    if (latestMarket && latestMarket.optionChain) {
+      const strikeMatch = parseInt(symbol.replace(/\D/g, ''));
+      if (strikeMatch) {
+        const matched = latestMarket.optionChain.find(c => c.strike === strikeMatch);
+        if (matched) {
+          exitPrice = symbol.endsWith('CE') ? matched.ce.ltp : matched.pe.ltp;
+        }
+      }
+    }
+
+    await liveTrader.recordExit(symbol, exitPrice, "MANUAL EXIT");
+
     res.json({ success: true, result });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
   }
 });
+
+// Fetch wallet stats, positions, history, and metrics for Live Mode
+router.get('/live/state', async (req, res) => {
+  try {
+    const state = await liveTrader.getAccountState();
+    res.json(state);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.use('/auto-trade', autoTradeRoutes);
 export default router;

@@ -18,6 +18,7 @@ let autoTradeParams = {
 };
 import angelOneService from './services/angelone.js';
 import paperTrader from './services/paperTrader.js';
+import liveTrader from './services/liveTrader.js';
 import scripMaster from './services/scripMaster.js';
 import { analyzeSignal } from './services/signalEngine.js';
 
@@ -168,6 +169,7 @@ marketSimulator.on('tick', async (marketData) => {
   // If not connected, broadcast a minimal TICK with paper state so UI stays alive
   if (!connected) {
     const paperStateFallback = await paperTrader.getAccountState().catch(() => null);
+    const liveStateFallback = await liveTrader.getAccountState().catch(() => null);
     broadcast({
       type: 'TICK',
       timestamp: new Date().toISOString(),
@@ -179,6 +181,7 @@ marketSimulator.on('tick', async (marketData) => {
       signal: { type: 'NO TRADE', confidence: 0, reason: 'Broker feed offline', atmStrike: null },
       indicators: {}, candles: [],
       paper: paperStateFallback,
+      liveState: liveStateFallback,
       liveModeActive: false,
       marketClosed: !open
     });
@@ -198,6 +201,7 @@ marketSimulator.on('tick', async (marketData) => {
     } catch (e) { /* ignore off-hours REST errors */ }
 
     const paperStateClosed = await paperTrader.getAccountState().catch(() => null);
+    const liveStateClosed = await liveTrader.getAccountState().catch(() => null);
     const signalClosed = analyzeSignal(marketData);
     broadcast({
       type: 'TICK',
@@ -214,6 +218,7 @@ marketSimulator.on('tick', async (marketData) => {
       indicators: signalClosed.indicators,
       candles: marketData.candles || [],
       paper: paperStateClosed,
+      liveState: liveStateClosed,
       liveModeActive: connected,
       marketClosed: true
     });
@@ -397,6 +402,17 @@ if (isLiveAutoEnabled && strike > 0 && marketData.optionChain && marketData.opti
           transactionType: 'BUY',
           optionType: 'CE'
         });
+        await liveTrader.recordEntry({
+          symbol: ceContract.symbol,
+          strike,
+          quantity: qty,
+          entryPrice: ceContract.ltp,
+          optionType: 'CE',
+          slPoints: 15,
+          targetPoints: 30,
+          isAutoSignal: true,
+          entryCriteria: { niftySpot: marketData.niftySpot, ceProbability: ceProb, peProbability: peProb, reasons: ["Live Auto-trade: CE probability >= 50%"] }
+        });
         broadcast({ type: 'AUTO_TRADE_LOG', message: `Live CE Auto‑trade executed at ${strike} (Qty: ${qty})` });
       } catch (e) {
         console.error('Live Auto‑trade CE order failed:', e.message);
@@ -417,6 +433,17 @@ if (isLiveAutoEnabled && strike > 0 && marketData.optionChain && marketData.opti
           transactionType: 'BUY',
           optionType: 'PE'
         });
+        await liveTrader.recordEntry({
+          symbol: peContract.symbol,
+          strike,
+          quantity: qty,
+          entryPrice: peContract.ltp,
+          optionType: 'PE',
+          slPoints: 15,
+          targetPoints: 30,
+          isAutoSignal: true,
+          entryCriteria: { niftySpot: marketData.niftySpot, ceProbability: ceProb, peProbability: peProb, reasons: ["Live Auto-trade: PE probability >= 50%"] }
+        });
         broadcast({ type: 'AUTO_TRADE_LOG', message: `Live PE Auto‑trade executed at ${strike} (Qty: ${qty})` });
       } catch (e) {
         console.error('Live Auto‑trade PE order failed:', e.message);
@@ -426,8 +453,9 @@ if (isLiveAutoEnabled && strike > 0 && marketData.optionChain && marketData.opti
 }
 
 
-  // 4. Fetch latest paper trading account metrics
+  // 4. Fetch latest paper and live trading account metrics
   const paperState = await paperTrader.getAccountState();
+  const liveState = await liveTrader.getAccountState();
 
   // 5. Compile the consolidated real-time stream packet
   const streamPayload = {
@@ -450,6 +478,7 @@ if (isLiveAutoEnabled && strike > 0 && marketData.optionChain && marketData.opti
     indicators: signalResult.indicators,
     candles: marketData.candles,
     paper: paperState,
+    liveState: liveState,
     liveModeActive: angelOneService.isConnected
   };
 
